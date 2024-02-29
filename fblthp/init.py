@@ -24,7 +24,7 @@ for feature in features:
 data = data[:-1]
 
 for card in cards:
-    if 'Creature' not in card['type_line'] or 'Token' in card['type_line']:
+    if 'Creature' not in card['type_line'] or 'Token' in card['type_line'] or 'card_faces' in card:
         continue
     data += '\n'
     for feature in features:

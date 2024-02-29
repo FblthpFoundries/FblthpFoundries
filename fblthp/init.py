@@ -12,6 +12,7 @@ jsonURI = json.loads(r.content)['download_uri']
 r = requests.get(jsonURI)
 
 cards = json.loads(r.content)
+r.close()
 
 #https://scryfall.com/docs/api/cards Currently only loading creatures
 
@@ -23,12 +24,16 @@ for feature in features:
 data = data[:-1]
 
 for card in cards:
-    if 'Creature' not in card['type_line']:
+    if 'Creature' not in card['type_line'] or 'Token' in card['type_line']:
         continue
     data += '\n'
     for feature in features:
         if feature not in card:
             data += '<empty>,'
             continue
-        data += '\"' + card[feature].replace("\"", "\\\"") + '\",'
+        data += '\"' + card[feature].replace("\"", "").replace('\n', '<nl>') + '\",'
     data = data[:-1]
+
+f = open('cards.csv', 'w', encoding='utf-8')
+f.write(data)
+f.close()

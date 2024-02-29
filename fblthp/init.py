@@ -30,5 +30,5 @@ for card in cards:
         if feature not in card:
             data += '<empty>,'
             continue
-        data += '\"' + card[feature] + '\",'
+        data += '\"' + card[feature].replace("\"", "\\\"") + '\",'
     data = data[:-1]

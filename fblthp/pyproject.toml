@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "fblthp"
+version = "0.1.0"
+description = ""
+authors = ["OWEN JACKSON <u1229070@umail.utah.edu>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+requests = "^2.31.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

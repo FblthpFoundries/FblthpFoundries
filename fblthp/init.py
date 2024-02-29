@@ -31,7 +31,7 @@ for card in cards:
         if feature not in card:
             data += '<empty>,'
             continue
-        data += '\"' + card[feature].replace("\"", "").replace('\n', '<nl>') + '\",'
+        data += '\"' + card[feature].replace("\"", "").replace('\n', ' <nl> ').replace('}{', '} {') + '\",'
     data = data[:-1]
 
 f = open('cards.csv', 'w', encoding='utf-8')

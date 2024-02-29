@@ -5,11 +5,14 @@ import math
 import os
 from tempfile import TemporaryDirectory
 from typing import Tuple
+import csv2tokens
 
 import torch
 from torch import nn, Tensor
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
+from tokenizers import Tokenizer
+from transformers import GPT2TokenizerFast
 
 class FblthpTransformerModel(nn.Module):
 
@@ -71,4 +74,8 @@ class PositionalEncoding(nn.Module):
 
 
 if __name__ == "__main__":
-    pass
+    if not os.path.isfile('tokenizer.json'):
+        csv2tokens.tokenize()
+    tokenizer = Tokenizer.from_file('tokenizer.json')
+    wrapped_tokeinizer = GPT2TokenizerFast(tokenizer_object = tokenizer)
+    

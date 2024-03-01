@@ -1,6 +1,9 @@
 import pandas
 import argparse
 from tokenizers import Tokenizer, pre_tokenizers, models, trainers, processors, decoders 
+import os
+from transformers import GPT2TokenizerFast
+import torch
 
 #https://huggingface.co/learn/nlp-course/chapter6/8#building-a-bpe-tokenizer-from-scratch
 
@@ -11,8 +14,32 @@ specialTokenDict ={
     'power': '<power>',
     'toughness': '<toughness>',
     'oracle_text': '<ot>',
-    'flavor_text': '<ft>'
+    'flavor_text': '<ft>',
+    'eos' : '<|endoftext|>',
+    'pad_token' : '<pad>'
 }
+
+def tokenize(file, features):
+    if not os.path.isfile('tokenizer.json'):
+        createTokenizer()
+    tokenizer = Tokenizer.from_file('tokenizer.json')
+    wrapped_tokeinizer = GPT2TokenizerFast(tokenizer_object = tokenizer)
+
+    wrapped_tokeinizer.add_special_tokens({'eos_token': '<|endoftext|>', 'pad_token':'<pad>'})
+
+    tokenized = []
+    csv = pandas.read_csv(file)
+
+    for index, row in csv.iterrows():
+        text = specialTokenDict['eos']
+        for feature in features:
+            text += specialTokenDict[feature] + str(row[feature]) + ' '
+        text += specialTokenDict['eos']
+        tokenized.append(text)
+
+    data = [torch.LongTensor(card) for card in wrapped_tokeinizer(tokenized, padding=True)['input_ids']]
+
+    return torch.stack(data), wrapped_tokeinizer
 
 def getCorpus(csv):
     df = pandas.read_csv(csv)
@@ -22,6 +49,8 @@ def getCorpus(csv):
     for index, row in df.iterrows():
         text= ''
         for feature in specialTokenDict:
+            if feature not in row:
+                continue
             text +=   ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
         corpus.append(text)
 
@@ -33,11 +62,10 @@ def getCorpus(csv):
 
     
 
-def tokenize(csv = 'cards.csv', k = 30_000):
+def createTokenizer(csv = 'cards.csv', k = 30_000):
 
     corpus = getCorpus(csv)
-    special_tokens = [specialTokenDict[key] for key in specialTokenDict]
-    special_tokens.append('<|endoftext|>')
+    special_tokens = [specialTokenDict[key] for key in specialTokenDict] 
 
     tokenizer = Tokenizer(models.BPE())
     tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=True)
@@ -49,7 +77,6 @@ def tokenize(csv = 'cards.csv', k = 30_000):
     tokenizer.save('tokenizer.json')
 
 
-
 if __name__ == '__main__':
     parse = argparse.ArgumentParser(description='Loads CSV of card data and builds BPE tokenizer')
     parse.add_argument('-f', '--file', help='File path holding CSV of card data', type=str,  required=False)
@@ -59,4 +86,4 @@ if __name__ == '__main__':
     csv = args.file if args.file else 'cards.csv'
     k = args.k if args.k else 30_000
 
-    tokenize(csv=csv, k=k)
+    createTokenizer(csv=csv, k=k)

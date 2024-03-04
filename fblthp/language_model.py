@@ -6,7 +6,7 @@ import os
 from tempfile import TemporaryDirectory
 from typing import Tuple
 import csv2tokens
-
+import numpy as np
 import torch
 from torch import nn, Tensor, optim
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
@@ -74,13 +74,13 @@ class PositionalEncoding(nn.Module):
 
 
 if __name__ == "__main__":
-    epochs = 5
-    batch_size = 1
+    epochs = 20
+    batch_size = 20
 
 
     data, tokenizer = csv2tokens.tokenize(file = 'cards.csv', features = ['name', 'mana_cost', 'type_line', 'power', 'toughness', 'oracle_text', 'flavor_text'])
     print(data.shape)
-    
+    #print(tokenizer.decode(data[5]))
     embed_dim = len(tokenizer)
 
     model = FblthpTransformerModel(ntoken=embed_dim, d_model=1000 * 2, nhead=5, d_hid=1000 * 4, nlayers= 4)
@@ -96,21 +96,28 @@ if __name__ == "__main__":
         batches = [data[i:i+batch_size] for i in range(0, data.shape[0], batch_size)]
 
         
-        print(batches[0].shape)
+        #print(batches[0].shape)
         optimizer.zero_grad()
-        true = torch.zeros((batches[0].shape[0], embed_dim))
+        #for batch in batches:
+        true = torch.zeros((batches[0].shape[0], embed_dim), dtype=torch.int64)
         output = model.forward(batches[0])
         loss = loss_func(output, true)
         loss.backward()
         optimizer.step()
 
-        epoch_loss += loss.item / batches[0].shape[0]
+        epoch_loss += loss.item() / batches[0].shape[0]
 
         print(f'{epoch}: {epoch_loss}')
-
+    #using greedy choice for simplicity but we should do nucleus sampling instead later
+    current_string = "<|endoftext|>"
     for i in range(30):
-        out = model.forward(tokenizer('<|endoftext|>')['input_ids'])
-        print(tokenizer.decode(out))
+        model_output = model.forward(torch.Tensor(np.array(tokenizer(current_string)['input_ids'])).to(torch.int64))[-1,-1,:]
+        #print(model_output.shape)
+        chosen = torch.argmax(model_output)
+        out = tokenizer.decode(chosen)
+        print(f"Output: {chosen}, decoded: '{out}'")
+        current_string = current_string + " " + out
+    print(current_string)
 
 
 

@@ -118,7 +118,7 @@ if __name__ == "__main__":
     embed_dim = len(tokenizer)
     print(data)
 
-    model = FblthpTransformerModel(ntoken=embed_dim, d_model=10000 * 2, nhead=5, d_hid=10000 * 4, nlayers= 4).to(device)
+    model = FblthpTransformerModel(ntoken=embed_dim, d_model=1000 * 2, nhead=5, d_hid=1000 * 4, nlayers= 4).to(device)
     model.train()
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4)

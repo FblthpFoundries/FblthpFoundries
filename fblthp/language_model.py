@@ -13,6 +13,8 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
 from tokenizers import Tokenizer
 
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
 class FblthpTransformerModel(nn.Module):
 
     def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int,
@@ -50,10 +52,10 @@ class FblthpTransformerModel(nn.Module):
             """Generate a square causal mask for the sequence. The masked positions are filled with float('-inf').
             Unmasked positions are filled with float(0.0).
             """
-            src_mask = nn.Transformer.generate_square_subsequent_mask(len(src))#.to(device)
-        output = self.transformer_encoder(src)#, src_mask)
+            src_mask = nn.Transformer.generate_square_subsequent_mask(len(src)).to(device)
+        output = self.transformer_encoder(src, src_mask)
         output = self.linear(output)
-        return self.sm(output)
+        return output
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len : int = 5000):
         super().__init__()
@@ -71,53 +73,92 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
+    
+bptt = 35
+def get_batch(source: Tensor, i: int) -> Tuple[Tensor, Tensor]:
+    """
+    Args:
+        source: Tensor, shape ``[full_seq_len, batch_size]``
+        i: int
 
+    Returns:
+        tuple (data, target), where data has shape ``[seq_len, batch_size]`` and
+        target has shape ``[seq_len * batch_size]``
+    """
+    seq_len = min(bptt, len(source) - 1 - i)
+    data = source[i:i+seq_len]
+    target = source[i+1:i+1+seq_len].reshape(-1)
+    return data, target
+
+def batchify(data: Tensor, bsz: int) -> Tensor:
+    """Divides the data into ``bsz`` separate sequences, removing extra elements
+    that wouldn't cleanly fit.
+
+    Arguments:
+        data: Tensor, shape ``[N]``
+        bsz: int, batch size
+
+    Returns:
+        Tensor of shape ``[N // bsz, bsz]``
+    """
+    seq_len = data.size(0) // bsz
+    data = data[:seq_len * bsz]
+    data = data.view(bsz, seq_len).t().contiguous()
+    return data.to(device)
 
 if __name__ == "__main__":
-    epochs = 20
-    batch_size = 20
+    print(device)
+    epochs = 5
+    batch_size = 1
 
 
     data, tokenizer = csv2tokens.tokenize(file = 'cards.csv', features = ['name', 'mana_cost', 'type_line', 'power', 'toughness', 'oracle_text', 'flavor_text'])
     print(data.shape)
     #print(tokenizer.decode(data[5]))
     embed_dim = len(tokenizer)
+    print(data)
 
-    model = FblthpTransformerModel(ntoken=embed_dim, d_model=1000 * 2, nhead=5, d_hid=1000 * 4, nlayers= 4)
-    model.eval()
+    model = FblthpTransformerModel(ntoken=embed_dim, d_model=10000 * 2, nhead=5, d_hid=10000 * 4, nlayers= 4).to(device)
+    model.train()
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    loss_func = nn.NLLLoss()
+    loss_func = nn.CrossEntropyLoss()
+    data = batchify(data, 20)
+    print(data)
+
 
     for epoch in range(epochs):
         epoch_loss = 0
-        indices = torch.randperm(data.shape[0])
-        data = data[indices]
-        batches = [data[i:i+batch_size] for i in range(0, data.shape[0], batch_size)]
 
-        
-        #print(batches[0].shape)
-        optimizer.zero_grad()
-        #for batch in batches:
-        true = torch.zeros((batches[0].shape[0], embed_dim), dtype=torch.int64)
-        output = model.forward(batches[0])
-        loss = loss_func(output, true)
-        loss.backward()
-        optimizer.step()
+        for i in range(0, data.size(0), bptt):
+            batch, true = get_batch(data, i)
+            optimizer.zero_grad()
+            output = model.forward(batch)  
+            output_flat = output.view(-1, embed_dim)
+            loss = loss_func(output_flat, true)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            optimizer.step()
 
-        epoch_loss += loss.item() / batches[0].shape[0]
+            epoch_loss += loss.item() / batch.shape[0]
 
         print(f'{epoch}: {epoch_loss}')
     #using greedy choice for simplicity but we should do nucleus sampling instead later
-    current_string = "<|endoftext|>"
-    for i in range(30):
-        model_output = model.forward(torch.Tensor(np.array(tokenizer(current_string)['input_ids'])).to(torch.int64))[-1,-1,:]
-        #print(model_output.shape)
-        chosen = torch.argmax(model_output)
-        out = tokenizer.decode(chosen)
-        print(f"Output: {chosen}, decoded: '{out}'")
-        current_string = current_string + " " + out
-    print(current_string)
+        
+    while True:
+        command = input()
+        if command == 'q':
+            break
+        current_string = "<|endoftext|>"
+        model.eval()
+        for i in range(30):
+            model_output = model.forward(torch.from_numpy(np.array(tokenizer(current_string)['input_ids'], dtype=np.int64)).to(device))[-1,-1,:]
+            #print(model_output.shape)
+            chosen = torch.argmax(model_output)
+            out = tokenizer.decode(chosen)
+            print(f"Output: {chosen}, decoded: '{out}'")
+            current_string = current_string + " " + out
+        print(current_string)
 
 
 

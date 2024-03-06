@@ -4,6 +4,7 @@ from tokenizers import Tokenizer, pre_tokenizers, models, trainers, processors, 
 import os
 from transformers import GPT2TokenizerFast
 import torch
+import numpy as np
 
 #https://huggingface.co/learn/nlp-course/chapter6/8#building-a-bpe-tokenizer-from-scratch
 
@@ -27,19 +28,22 @@ def tokenize(file, features):
 
     wrapped_tokeinizer.add_special_tokens({'eos_token': '<|endoftext|>', 'pad_token':'<pad>'})
 
-    tokenized = []
+    text = ''
     csv = pandas.read_csv(file)
 
     for index, row in csv.iterrows():
-        text = specialTokenDict['eos']
+
+        #if index > 1000:
+        #    break
+        text += specialTokenDict['eos']
         for feature in features:
             text += specialTokenDict[feature] + str(row[feature]) + ' '
         text += specialTokenDict['eos']
-        tokenized.append(text)
 
-    data = [torch.LongTensor(card) for card in wrapped_tokeinizer(tokenized, padding=True)['input_ids']]
 
-    return torch.stack(data), wrapped_tokeinizer
+    data = torch.from_numpy(np.array(wrapped_tokeinizer(text)['input_ids'], dtype=np.int64))
+
+    return data, wrapped_tokeinizer
 
 def getCorpus(csv):
     df = pandas.read_csv(csv)

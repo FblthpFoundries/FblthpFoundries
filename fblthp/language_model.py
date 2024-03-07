@@ -144,12 +144,12 @@ if __name__ == "__main__":
 
         print(f'{epoch}: {epoch_loss}')
     #using greedy choice for simplicity but we should do nucleus sampling instead later
-        
+    print('done Training')
     while True:
         command = input()
         if command == 'q':
             break
-        current_string = "<|endoftext|>"
+        current_string = command
         model.eval()
         for i in range(30):
             model_output = model.forward(torch.from_numpy(np.array(tokenizer(current_string)['input_ids'], dtype=np.int64)).to(device))[-1,-1,:]
@@ -159,6 +159,7 @@ if __name__ == "__main__":
             print(f"Output: {chosen}, decoded: '{out}'")
             current_string = current_string + " " + out
         print(current_string)
+
 
 
 

@@ -37,9 +37,8 @@ def tokenize(file, features):
         #    break
         text += specialTokenDict['eos']
         for feature in features:
-            text += specialTokenDict[feature] + str(row[feature]) + ' '
+            text += ' ' + specialTokenDict[feature] + ' ' + str(row[feature]) + ' '
         text += specialTokenDict['eos']
-
 
     data = torch.from_numpy(np.array(wrapped_tokeinizer(text)['input_ids'], dtype=np.int64))
 

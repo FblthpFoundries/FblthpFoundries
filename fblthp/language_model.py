@@ -108,7 +108,7 @@ def batchify(data: Tensor, bsz: int) -> Tensor:
 
 if __name__ == "__main__":
     print(device)
-    epochs = 5
+    epochs = 20
     batch_size = 1
 
 
@@ -118,12 +118,12 @@ if __name__ == "__main__":
     embed_dim = len(tokenizer)
     print(data)
 
-    model = FblthpTransformerModel(ntoken=embed_dim, d_model=1000 * 2, nhead=5, d_hid=1000 * 4, nlayers= 4).to(device)
+    model = FblthpTransformerModel(ntoken=embed_dim, d_model=1000 * 2, nhead=5, d_hid=1000 * 4, nlayers= 4, dropout=0.2).to(device)
     model.train()
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     loss_func = nn.CrossEntropyLoss()
-    data = batchify(data, 20)
+    data = batchify(data, 100)
     print(data)
 
 
@@ -144,6 +144,7 @@ if __name__ == "__main__":
 
         print(f'{epoch}: {epoch_loss}')
     #using greedy choice for simplicity but we should do nucleus sampling instead later
+    torch.save(torch.jit.script(model), 'model.pt')
     print('done Training')
     while True:
         command = input()

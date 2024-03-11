@@ -5,6 +5,7 @@ import os
 from transformers import GPT2TokenizerFast
 import torch
 import numpy as np
+import re
 
 #https://huggingface.co/learn/nlp-course/chapter6/8#building-a-bpe-tokenizer-from-scratch
 
@@ -55,7 +56,7 @@ def getCorpus(csv):
             if feature not in row:
                 continue
             text +=   ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
-        corpus.append(text)
+        corpus.append(sanitize(text))
 
     f = open('corpus.txt', 'w', encoding='utf-8')
     for text in corpus:
@@ -64,10 +65,26 @@ def getCorpus(csv):
     return corpus
 
     
+def sanitize(text):
+    while '{' in text:
+        indexOpen  = text.index('{')
+        indexClose = text.index('}')
+
+        symbol =text[indexOpen: indexClose + 1]
+        token = '<' + text[indexOpen + 1: indexClose] + '>'
+
+        if not symbol in specialTokenDict:
+            specialTokenDict[symbol] = token
+
+        text = text[: indexOpen] + token + text[indexClose + 1:]
+
+
+    return text
 
 def createTokenizer(csv = 'cards.csv', k = 30_000):
 
     corpus = getCorpus(csv)
+
     special_tokens = [specialTokenDict[key] for key in specialTokenDict] 
 
     tokenizer = Tokenizer(models.BPE())

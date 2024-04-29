@@ -52,10 +52,14 @@ def getCorpus(csv):
 
     for index, row in df.iterrows():
         text= ''
+        name = row['name']
         for feature in specialTokenDict:
             if feature not in row:
                 continue
-            text +=   ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
+            append =' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
+            if not feature == 'name':
+                append = append.replace(name, '~')
+            text +=  append
         corpus.append(sanitize(text))
 
     f = open('corpus.txt', 'w', encoding='utf-8')

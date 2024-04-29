@@ -56,11 +56,11 @@ def getCorpus(csv):
         for feature in specialTokenDict:
             if feature not in row:
                 continue
-            append =' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
+            append =' ' + specialTokenDict[feature] + ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
             if not feature == 'name':
                 append = append.replace(name, '~')
             text +=  append
-        corpus.append(sanitize(text))
+        corpus.append(sanitize(text) + specialTokenDict['eos'])
 
     f = open('corpus.txt', 'w', encoding='utf-8')
     for text in corpus:

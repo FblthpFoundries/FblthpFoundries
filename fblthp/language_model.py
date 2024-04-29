@@ -112,7 +112,7 @@ if __name__ == "__main__":
     batch_size = 1
 
 
-    data, tokenizer = csv2tokens.tokenize(file = 'cards.csv', features = ['name', 'mana_cost', 'type_line', 'power', 'toughness', 'oracle_text', 'flavor_text'])
+    data, tokenizer = csv2tokens.tokenize(file = 'cards.csv', features = ['type_line', 'name', 'mana_cost', 'oracle_text', 'power', 'toughness',  'flavor_text'])
     print(data.shape)
     #print(tokenizer.decode(data[5]))
     embed_dim = len(tokenizer)

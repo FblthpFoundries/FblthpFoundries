@@ -10,12 +10,12 @@ import re
 #https://huggingface.co/learn/nlp-course/chapter6/8#building-a-bpe-tokenizer-from-scratch
 
 specialTokenDict ={
+    'type_line': '<tl>',
     'name': '<name>',
     'mana_cost': '<mc>',
-    'type_line': '<tl>',
+    'oracle_text': '<ot>',
     'power': '<power>',
     'toughness': '<toughness>',
-    'oracle_text': '<ot>',
     'flavor_text': '<ft>',
     'eos' : '<|endoftext|>',
     'pad_token' : '<pad>'

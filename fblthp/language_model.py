@@ -113,6 +113,7 @@ if __name__ == "__main__":
 
 
     data, tokenizer = csv2tokens.tokenize(file = 'cards.csv', features = ['type_line', 'name', 'mana_cost', 'oracle_text', 'power', 'toughness',  'flavor_text'])
+    tokenizer.save_pretrained('./models/tokenizer')
     print(data.shape)
     #print(tokenizer.decode(data[5]))
     embed_dim = len(tokenizer)
@@ -143,10 +144,10 @@ if __name__ == "__main__":
             epoch_loss += loss.item() / batch.shape[0]
 
         print(f'{epoch}: {epoch_loss}')
+    torch.save(model, './models/model.pt')
     #using greedy choice for simplicity but we should do nucleus sampling instead later
-    torch.save(torch.jit.script(model), 'model.pt')
     print('done Training')
-    while True:
+    while False:
         command = input()
         if command == 'q':
             break

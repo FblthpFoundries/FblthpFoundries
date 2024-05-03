@@ -28,7 +28,7 @@ def main(args):
 
     with open(out, 'w', encoding='utf8') as f:
         for card in cards:
-            f.write(card)
+            f.write(card + '\n')
 
 
 def genCard(model, tokenizer, temp, verbose):

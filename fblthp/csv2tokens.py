@@ -18,8 +18,16 @@ specialTokenDict ={
     'toughness': '<toughness>',
     'flavor_text': '<ft>',
     'eos' : '<|endoftext|>',
-    'pad_token' : '<pad>'
+    'pad_token' : '<pad>',
+    'nl': '<nl>'
 }
+
+pp = '\+[0-9|X]+\/\+[0-9|X]+'
+mm = '\-[0-9|X]+\/\-[0-9|X]+'
+xx = '[0-9|X]+\/[0-9|X]+'
+pm = '\+[0-9|X]+\/\-[0-9|X]+'
+mp = '\-[0-9|X]+\/\+[0-9|X]+'
+
 
 def tokenize(file, features):
     if not os.path.isfile('tokenizer.json'):
@@ -38,8 +46,12 @@ def tokenize(file, features):
         #    break
         text += specialTokenDict['eos']
         for feature in features:
-            text += ' ' + specialTokenDict[feature] + ' ' + str(row[feature]) + ' '
-        text += specialTokenDict['eos']
+            info = str(row[feature])
+            if not feature == 'name':
+                info = info.replace(row['name'], '~')
+            text += ' ' + specialTokenDict[feature] + ' ' + info + ' '
+            
+        #text += specialTokenDict['eos']
 
     data = torch.from_numpy(np.array(wrapped_tokeinizer(text)['input_ids'], dtype=np.int64))
 

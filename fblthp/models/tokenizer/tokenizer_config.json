@@ -74,7 +74,7 @@
       "special": true
     },
     "9": {
-      "content": "<1>",
+      "content": "<nl>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -82,7 +82,7 @@
       "special": true
     },
     "10": {
-      "content": "<U>",
+      "content": "<1>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -90,7 +90,7 @@
       "special": true
     },
     "11": {
-      "content": "<B>",
+      "content": "<U>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -98,7 +98,7 @@
       "special": true
     },
     "12": {
-      "content": "<T>",
+      "content": "<B>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -106,7 +106,7 @@
       "special": true
     },
     "13": {
-      "content": "<G>",
+      "content": "<T>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -114,7 +114,7 @@
       "special": true
     },
     "14": {
-      "content": "<2>",
+      "content": "<G>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -122,7 +122,7 @@
       "special": true
     },
     "15": {
-      "content": "<7>",
+      "content": "<2>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -130,7 +130,7 @@
       "special": true
     },
     "16": {
-      "content": "<C>",
+      "content": "<7>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -138,7 +138,7 @@
       "special": true
     },
     "17": {
-      "content": "<5>",
+      "content": "<C>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -146,7 +146,7 @@
       "special": true
     },
     "18": {
-      "content": "<W>",
+      "content": "<5>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -154,7 +154,7 @@
       "special": true
     },
     "19": {
-      "content": "<3>",
+      "content": "<W>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -162,7 +162,7 @@
       "special": true
     },
     "20": {
-      "content": "<B/P>",
+      "content": "<3>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -170,7 +170,7 @@
       "special": true
     },
     "21": {
-      "content": "<R>",
+      "content": "<B/P>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -178,7 +178,7 @@
       "special": true
     },
     "22": {
-      "content": "<W/U>",
+      "content": "<R>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -186,7 +186,7 @@
       "special": true
     },
     "23": {
-      "content": "<U/B>",
+      "content": "<W/U>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -194,7 +194,7 @@
       "special": true
     },
     "24": {
-      "content": "<W/B>",
+      "content": "<U/B>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -202,7 +202,7 @@
       "special": true
     },
     "25": {
-      "content": "<6>",
+      "content": "<W/B>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -210,7 +210,7 @@
       "special": true
     },
     "26": {
-      "content": "<4>",
+      "content": "<6>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -218,7 +218,7 @@
       "special": true
     },
     "27": {
-      "content": "<R/W>",
+      "content": "<4>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -226,7 +226,7 @@
       "special": true
     },
     "28": {
-      "content": "<U/R>",
+      "content": "<R/W>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -234,7 +234,7 @@
       "special": true
     },
     "29": {
-      "content": "<Q>",
+      "content": "<U/R>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -242,7 +242,7 @@
       "special": true
     },
     "30": {
-      "content": "<10>",
+      "content": "<Q>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -250,7 +250,7 @@
       "special": true
     },
     "31": {
-      "content": "<X>",
+      "content": "<10>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -258,7 +258,7 @@
       "special": true
     },
     "32": {
-      "content": "<G/U>",
+      "content": "<X>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -266,7 +266,7 @@
       "special": true
     },
     "33": {
-      "content": "<W/P>",
+      "content": "<G/U>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -274,7 +274,7 @@
       "special": true
     },
     "34": {
-      "content": "<TK>",
+      "content": "<W/P>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -282,7 +282,7 @@
       "special": true
     },
     "35": {
-      "content": "<B/G>",
+      "content": "<TK>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -290,7 +290,7 @@
       "special": true
     },
     "36": {
-      "content": "<S>",
+      "content": "<B/G>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -298,7 +298,7 @@
       "special": true
     },
     "37": {
-      "content": "<G/W>",
+      "content": "<S>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -306,7 +306,7 @@
       "special": true
     },
     "38": {
-      "content": "<E>",
+      "content": "<G/W>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -314,7 +314,7 @@
       "special": true
     },
     "39": {
-      "content": "<8>",
+      "content": "<E>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -322,7 +322,7 @@
       "special": true
     },
     "40": {
-      "content": "<R/G>",
+      "content": "<8>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -330,7 +330,7 @@
       "special": true
     },
     "41": {
-      "content": "<0>",
+      "content": "<R/G>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -338,7 +338,7 @@
       "special": true
     },
     "42": {
-      "content": "<B/R>",
+      "content": "<0>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -346,7 +346,7 @@
       "special": true
     },
     "43": {
-      "content": "<14>",
+      "content": "<B/R>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -354,7 +354,7 @@
       "special": true
     },
     "44": {
-      "content": "<9>",
+      "content": "<14>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -362,7 +362,7 @@
       "special": true
     },
     "45": {
-      "content": "<11>",
+      "content": "<9>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -370,7 +370,7 @@
       "special": true
     },
     "46": {
-      "content": "<HR>",
+      "content": "<11>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -378,7 +378,7 @@
       "special": true
     },
     "47": {
-      "content": "<12>",
+      "content": "<HR>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -386,7 +386,7 @@
       "special": true
     },
     "48": {
-      "content": "<U/P>",
+      "content": "<12>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -394,7 +394,7 @@
       "special": true
     },
     "49": {
-      "content": "<13>",
+      "content": "<U/P>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -402,7 +402,7 @@
       "special": true
     },
     "50": {
-      "content": "<G/P>",
+      "content": "<13>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -410,7 +410,7 @@
       "special": true
     },
     "51": {
-      "content": "<16>",
+      "content": "<G/P>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -418,7 +418,7 @@
       "special": true
     },
     "52": {
-      "content": "<2/W>",
+      "content": "<16>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -426,7 +426,7 @@
       "special": true
     },
     "53": {
-      "content": "<2/U>",
+      "content": "<2/W>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -434,7 +434,7 @@
       "special": true
     },
     "54": {
-      "content": "<2/B>",
+      "content": "<2/U>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -442,7 +442,7 @@
       "special": true
     },
     "55": {
-      "content": "<2/R>",
+      "content": "<2/B>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -450,7 +450,7 @@
       "special": true
     },
     "56": {
-      "content": "<2/G>",
+      "content": "<2/R>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -458,7 +458,7 @@
       "special": true
     },
     "57": {
-      "content": "<R/P>",
+      "content": "<2/G>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -466,7 +466,7 @@
       "special": true
     },
     "58": {
-      "content": "<15>",
+      "content": "<R/P>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -474,7 +474,7 @@
       "special": true
     },
     "59": {
-      "content": "<HW>",
+      "content": "<15>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -482,7 +482,7 @@
       "special": true
     },
     "60": {
-      "content": "<½>",
+      "content": "<C/W>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -490,7 +490,7 @@
       "special": true
     },
     "61": {
-      "content": "<20>",
+      "content": "<C/U>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -498,7 +498,7 @@
       "special": true
     },
     "62": {
-      "content": "<Z>",
+      "content": "<C/B>",
       "lstrip": false,
       "normalized": false,
       "rstrip": false,
@@ -506,6 +506,54 @@
       "special": true
     },
     "63": {
+      "content": "<C/R>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "64": {
+      "content": "<C/G>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "65": {
+      "content": "<HW>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "66": {
+      "content": "<½>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "67": {
+      "content": "<20>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "68": {
+      "content": "<Z>",
+      "lstrip": false,
+      "normalized": false,
+      "rstrip": false,
+      "single_word": false,
+      "special": true
+    },
+    "69": {
       "content": "<A>",
       "lstrip": false,
       "normalized": false,

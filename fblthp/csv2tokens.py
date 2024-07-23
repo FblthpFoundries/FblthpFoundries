@@ -22,40 +22,62 @@ specialTokenDict ={
     'nl': '<nl>'
 }
 
-pp = '\\+[0-9|X]+\\/\\+[0-9|X]+'
-mm = '\\-[0-9|X]+\\/\\-[0-9|X]+'
-xx = '[0-9|X]+\\/[0-9|X]+'
-pm = '\\+[0-9|X]+\\/\\-[0-9|X]+'
-mp = '\\-[0-9|X]+\\/\\+[0-9|X]+'
+pp = '\\+[0-9|X]+/\\+[0-9|X]+'
+mm = '\\-[0-9|X]+/\\-[0-9|X]+'
+xx = '[0-9|X]+/[0-9|X]+'
+pm = '\\+[0-9|X]+/\\-[0-9|X]+'
+mp = '\\-[0-9|X]+/\\+[0-9|X]+'
 
 
 def tokenize(file, features):
     if not os.path.isfile('tokenizer.json'):
         createTokenizer()
     tokenizer = Tokenizer.from_file('tokenizer.json')
-    wrapped_tokeinizer = GPT2TokenizerFast(tokenizer_object = tokenizer)
+    wrapped_tokenizer = GPT2TokenizerFast(tokenizer_object = tokenizer)
 
-    wrapped_tokeinizer.add_special_tokens({'eos_token': '<|endoftext|>', 'pad_token':'<pad>'})
+    wrapped_tokenizer.add_special_tokens({'eos_token': '<|endoftext|>', 'pad_token':'<pad>'})
 
-    text = ''
     csv = pandas.read_csv(file)
+    csv = csv.sample(n=5000)#change to frac 1 for full set
+
+    data = []
+    npdata =  np.array([])
+    
 
     for index, row in csv.iterrows():
 
-        #if index > 1000:
-        #    break
-        text += specialTokenDict['eos']
+        text = specialTokenDict['eos']
         for feature in features:
+            if feature == 'name':
+                text+= ' ' + specialTokenDict['name'] + ' ~ '
+                continue
             info = str(row[feature])
-            if not feature == 'name':
-                info = info.replace(row['name'], '~')
+            info = info.replace(row['name'], '~')
             text += ' ' + specialTokenDict[feature] + ' ' + info + ' '
             
-        #text += specialTokenDict['eos']
+        text += specialTokenDict['eos']
 
-    data = torch.from_numpy(np.array(wrapped_tokeinizer(text)['input_ids'], dtype=np.int64))
+        data.append(np.array(wrapped_tokenizer(text)['input_ids'], dtype=np.int64))
 
-    return data, wrapped_tokeinizer
+    max_len = getMaxLen(data)
+    for row in data:
+        row = np.append(row, ([wrapped_tokenizer('<pad>')['input_ids']]*(max_len - len(row))))  
+        if npdata.any():
+            npdata = np.vstack((npdata, row))
+        else:
+            npdata = row
+
+
+    data = torch.from_numpy(npdata).int().transpose(0,1)
+
+    return data, wrapped_tokenizer
+
+def getMaxLen(arr):
+    maxLen = 0
+    for row in arr:
+        if len(row) > maxLen:
+            maxLen=len(row)
+    return maxLen
 
 def getCorpus(csv):
     df = pandas.read_csv(csv)

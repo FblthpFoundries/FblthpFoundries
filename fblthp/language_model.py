@@ -12,6 +12,7 @@ from torch import nn, Tensor, optim
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
 from tokenizers import Tokenizer
+import random
 
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -26,7 +27,10 @@ class FblthpTransformerModel(nn.Module):
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         self.embedding = nn.Embedding(ntoken, d_model)
         self.d_model = d_model
-        self.linear = nn.Linear(d_model, ntoken)
+        self.linear1 = nn.Linear(d_model, 2*d_model)
+        self.linear2 = nn.Linear(2*d_model, (d_model+ntoken)//2)
+        self.linear3 = nn.Linear((d_model+ntoken)//2, ntoken)
+        self.dropout = nn.Dropout(dropout)
         self.sm = nn.LogSoftmax(dim=-1)
 
         self.init_weights()
@@ -34,8 +38,12 @@ class FblthpTransformerModel(nn.Module):
     def init_weights(self) -> None:
         initrange = 0.1
         self.embedding.weight.data.uniform_(-initrange, initrange)
-        self.linear.bias.data.zero_()
-        self.linear.weight.data.uniform_(-initrange, initrange)
+        self.linear1.bias.data.zero_()
+        self.linear1.weight.data.uniform_(-initrange, initrange)
+        self.linear2.bias.data.zero_()
+        self.linear2.bias.data.zero_()
+        self.linear3.weight.data.uniform_(-initrange, initrange)
+        self.linear3.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, src: Tensor, src_mask: Tensor = None) -> Tensor:
         """
@@ -54,7 +62,7 @@ class FblthpTransformerModel(nn.Module):
             """
             src_mask = nn.Transformer.generate_square_subsequent_mask(len(src)).to(device)
         output = self.transformer_encoder(src, src_mask)
-        output = self.linear(output)
+        output = self.linear3(self.dropout(self.linear2(self.dropout(self.linear1(output)))))
         return output
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len : int = 5000):
@@ -73,7 +81,24 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[:x.size(0)]
         return self.dropout(x)
-    
+
+class CoolerPositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len : int = 5000):
+        
+        super().__init__()
+        section_list = ['<tl>', '<name>', '<mc>', '<ot>', '<power>', '<toughness>', '<ft>']
+        token_idx = 0
+        section_idx = 0
+        embed = torch.nn.Embedding()
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+                Arguments:
+                    x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+        """
+        x = x + self.pe[:x.size(0)]
+        return self.dropout(x)
+
 bptt = 35
 def get_batch(source: Tensor, i: int) -> Tuple[Tensor, Tensor]:
     """
@@ -108,8 +133,8 @@ def batchify(data: Tensor, bsz: int) -> Tensor:
 
 if __name__ == "__main__":
     print(device)
-    epochs = 20
-    batch_size = 1
+    epochs = 50
+    batch_size = 100
 
 
     data, tokenizer = csv2tokens.tokenize(file = 'cards.csv', features = ['type_line', 'name', 'mana_cost', 'oracle_text', 'power', 'toughness',  'flavor_text'])
@@ -119,19 +144,55 @@ if __name__ == "__main__":
     embed_dim = len(tokenizer)
     print(data)
 
-    model = FblthpTransformerModel(ntoken=embed_dim, d_model=1000 * 2, nhead=5, d_hid=1000 * 4, nlayers= 4, dropout=0.2).to(device)
+    
+
+    model = FblthpTransformerModel(ntoken=embed_dim, d_model=100 * 2, nhead=5, d_hid=100 * 4, nlayers= 4, dropout=0.25).to(device)
     model.train()
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
     loss_func = nn.CrossEntropyLoss()
-    data = batchify(data, 100)
-    print(data)
+    #data = batchify(data, batch_size)
+    print(data.shape)
+    data = data.to(device)
 
-
+    
     for epoch in range(epochs):
         epoch_loss = 0
+        start = random.randint(0,data.size(1) - batch_size)
+        batch = data[:,start:start+batch_size]
+        print(f'batch:{batch.shape}')
 
-        for i in range(0, data.size(0), bptt):
+        output = model.forward(batch) #[seq, batch, ntokens]
+        correct = torch.zeros(output.shape).to(device)
+        for i in range(0, batch.size(0)):
+            for j in range(0,batch.size(1)):
+                correct[i,j,batch[i,j]] = 1
+
+        loss= loss_func(output, correct)
+    
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+        optimizer.step()
+
+        epoch_loss += loss.item() / batch.shape[0]
+        '''for i in range(1, batch.size(1)):
+            optimizer.zero_grad()
+            inp = batch[:,:i] #[batchsize, seq_len]
+            output = model.forward(inp)
+            correct = torch.zeros(output.shape).to(device)
+            correct[batch[:,i]] = 1
+            print('output')
+            print(output.shape)
+            print('correct')
+            print(correct.shape)
+            loss= loss_func(output, correct)
+        
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            optimizer.step()
+
+            epoch_loss += loss.item() / batch.shape[0]
+
             batch, true = get_batch(data, i)
             optimizer.zero_grad()
             output = model.forward(batch)  
@@ -141,26 +202,12 @@ if __name__ == "__main__":
             torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
             optimizer.step()
 
-            epoch_loss += loss.item() / batch.shape[0]
+            epoch_loss += loss.item() / batch.shape[0]'''
 
         print(f'{epoch}: {epoch_loss}')
     torch.save(model, './models/model.pt')
     #using greedy choice for simplicity but we should do nucleus sampling instead later
     print('done Training')
-    while False:
-        command = input()
-        if command == 'q':
-            break
-        current_string = command
-        model.eval()
-        for i in range(30):
-            model_output = model.forward(torch.from_numpy(np.array(tokenizer(current_string)['input_ids'], dtype=np.int64)).to(device))[-1,-1,:]
-            #print(model_output.shape)
-            chosen = torch.argmax(model_output)
-            out = tokenizer.decode(chosen)
-            print(f"Output: {chosen}, decoded: '{out}'")
-            current_string = current_string + " " + out
-        print(current_string)
 
 
 

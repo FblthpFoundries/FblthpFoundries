@@ -35,6 +35,7 @@ def genCard(model, tokenizer, temp, verbose):
     sm = torch.nn.Softmax(dim=0)
     iterations = 0
     currentString = '<tl>'
+        
     pred = ''
 
     while not pred == '<|endoftext|>' and iterations < 50 :

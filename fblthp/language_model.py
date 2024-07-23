@@ -133,7 +133,7 @@ def batchify(data: Tensor, bsz: int) -> Tensor:
 
 if __name__ == "__main__":
     print(device)
-    epochs = 50
+    epochs = 5
     batch_size = 100
 
 
@@ -146,7 +146,7 @@ if __name__ == "__main__":
 
     
 
-    model = FblthpTransformerModel(ntoken=embed_dim, d_model=100 * 2, nhead=5, d_hid=100 * 4, nlayers= 4, dropout=0.25).to(device)
+    model = FblthpTransformerModel(ntoken=embed_dim, d_model=100 * 2, nhead=5, d_hid=100 * 4, nlayers= 4, dropout=0.1).to(device)
     model.train()
 
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
@@ -158,33 +158,17 @@ if __name__ == "__main__":
     
     for epoch in range(epochs):
         epoch_loss = 0
-        start = random.randint(0,data.size(1) - batch_size)
-        batch = data[:,start:start+batch_size]
-        print(f'batch:{batch.shape}')
 
-        output = model.forward(batch) #[seq, batch, ntokens]
-        correct = torch.zeros(output.shape).to(device)
-        for i in range(0, batch.size(0)):
-            for j in range(0,batch.size(1)):
-                correct[i,j,batch[i,j]] = 1
+        for start in range(0, data.size(1), batch_size):
+            print(f'batch {start//batch_size}/{data.size(1)//batch_size}')
+            batch = data[:,start:start+batch_size]
 
-        loss= loss_func(output, correct)
-    
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-        optimizer.step()
-
-        epoch_loss += loss.item() / batch.shape[0]
-        '''for i in range(1, batch.size(1)):
-            optimizer.zero_grad()
-            inp = batch[:,:i] #[batchsize, seq_len]
-            output = model.forward(inp)
+            output = model.forward(batch) #[seq, batch, ntokens]
             correct = torch.zeros(output.shape).to(device)
-            correct[batch[:,i]] = 1
-            print('output')
-            print(output.shape)
-            print('correct')
-            print(correct.shape)
+            for i in range(0, batch.size(0)):
+                for j in range(0,batch.size(1)):
+                    correct[i,j,batch[i,j]] = 1
+
             loss= loss_func(output, correct)
         
             loss.backward()
@@ -192,17 +176,6 @@ if __name__ == "__main__":
             optimizer.step()
 
             epoch_loss += loss.item() / batch.shape[0]
-
-            batch, true = get_batch(data, i)
-            optimizer.zero_grad()
-            output = model.forward(batch)  
-            output_flat = output.view(-1, embed_dim)
-            loss = loss_func(output_flat, true)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-            optimizer.step()
-
-            epoch_loss += loss.item() / batch.shape[0]'''
 
         print(f'{epoch}: {epoch_loss}')
     torch.save(model, './models/model.pt')

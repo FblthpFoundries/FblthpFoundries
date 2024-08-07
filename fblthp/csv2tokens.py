@@ -93,12 +93,13 @@ def getCorpus(csv):
             append =' ' + specialTokenDict[feature] + ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
             if not feature == 'name':
                 append = append.replace(name, '~')
-            text +=  append
+            text +=  append[1:]
         corpus.append(sanitize(text) + specialTokenDict['eos'])
 
-    f = open('corpus.txt', 'w', encoding='utf-8')
+    f = open('corpus.csv', 'w', encoding='utf-8')
+    f.write('card\n')
     for text in corpus:
-        f.write(text + '\n')
+        f.write('\"'+text + '\"\n')
     f.close()
     return corpus
 

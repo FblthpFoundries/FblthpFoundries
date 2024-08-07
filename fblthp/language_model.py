@@ -133,7 +133,7 @@ def batchify(data: Tensor, bsz: int) -> Tensor:
 
 if __name__ == "__main__":
     print(device)
-    epochs = 5
+    epochs = 15
     batch_size = 100
 
 
@@ -158,24 +158,28 @@ if __name__ == "__main__":
     
     for epoch in range(epochs):
         epoch_loss = 0
+        start = epoch % (data.size(1)//batch_size)
 
-        for start in range(0, data.size(1), batch_size):
-            print(f'batch {start//batch_size}/{data.size(1)//batch_size}')
-            batch = data[:,start:start+batch_size]
+        #for start in range(0, data.size(1), batch_size):
+        print(f'batch {start * batch_size} to {start * batch_size + batch_size}')
+        batch = data[:,start:start+batch_size]
 
-            output = model.forward(batch) #[seq, batch, ntokens]
-            correct = torch.zeros(output.shape).to(device)
-            for i in range(0, batch.size(0)):
-                for j in range(0,batch.size(1)):
-                    correct[i,j,batch[i,j]] = 1
+        output = model.forward(batch) #[seq, batch, ntokens]
+        correct = torch.zeros(output.shape).to(device)
 
-            loss= loss_func(output, correct)
-        
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-            optimizer.step()
+        row_indices = torch.arange(batch.size(0) - 1).to(device)
+        col_indices = torch.arange(batch.size(1)).to(device)
 
-            epoch_loss += loss.item() / batch.shape[0]
+        # Use torch.scatter to set the correct indices to 1
+        correct[row_indices[:, None], col_indices[None, :], batch[:-1, :]] = 1
+
+        loss= loss_func(output, correct)
+    
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+        optimizer.step()
+
+        epoch_loss += loss.item() / batch.shape[0]
 
         print(f'{epoch}: {epoch_loss}')
     torch.save(model, './models/model.pt')

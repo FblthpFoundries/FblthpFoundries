@@ -5,6 +5,7 @@ from datasets import load_dataset
 from transformers import DataCollatorForLanguageModeling
 device = 'cuda'
 block_size = 256
+num_epochs = 10
 
 #https://huggingface.co/docs/transformers/tasks/language_modeling
 
@@ -15,7 +16,7 @@ def train():
     model = AutoModelForCausalLM.from_pretrained('gpt2')
 
     def preprocess_function(examples):
-        return tokenizer([" ".join(x) for x in examples['card']])
+        return tokenizer(["".join(x) for x in examples['card']])
 
     def group_texts(examples):
         # Concatenate all texts.
@@ -53,6 +54,8 @@ def train():
         learning_rate = 2e-5,
         weight_decay = 0.01,
         push_to_hub = False,
+        use_cpu = False,
+        num_train_epochs = num_epochs
     )
 
     trainer = Trainer(
@@ -68,15 +71,15 @@ def train():
 
 def gen():
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
-    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-7000')
-    text = " <tl>"
+    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-6000')
+    text = "<tl>"
     encoded_input = tokenizer(text, return_tensors='pt').to(device)
     model.to(device)
     output = model.generate(
         **encoded_input,
         do_sample=True,
         temperature = 0.9,
-        max_length =500,
+        max_length =200,
     )
     print(tokenizer.batch_decode(output)[0])
 

@@ -9,7 +9,7 @@ import re
 
 #https://huggingface.co/learn/nlp-course/chapter6/8#building-a-bpe-tokenizer-from-scratch
 
-specialTokenDict ={
+featureDict ={
     'type_line': '<tl>',
     'name': '<name>',
     'mana_cost': '<mc>',
@@ -17,7 +17,18 @@ specialTokenDict ={
     'power': '<power>',
     'toughness': '<toughness>',
     'flavor_text': '<ft>',
-    'eos' : '<|endoftext|>',
+    
+}
+
+specialTokenDict = {
+    'type_line': '<tl>',
+    'name': '<name>',
+    'mana_cost': '<mc>',
+    'oracle_text': '<ot>',
+    'power': '<power>',
+    'toughness': '<toughness>',
+    'flavor_text': '<ft>',
+    'eos' : '<eos>',
     'pad_token' : '<pad>',
     'nl': '<nl>'
 }
@@ -35,7 +46,7 @@ def tokenize(file, features):
     tokenizer = Tokenizer.from_file('tokenizer.json')
     wrapped_tokenizer = GPT2TokenizerFast(tokenizer_object = tokenizer)
 
-    wrapped_tokenizer.add_special_tokens({'eos_token': '<|endoftext|>', 'pad_token':'<pad>'})
+    wrapped_tokenizer.add_special_tokens({'eos_token': '<eos>', 'pad_token':'<pad>'})
 
     csv = pandas.read_csv(file)
     csv = csv.sample(n=5000)#change to frac 1 for full set
@@ -46,16 +57,16 @@ def tokenize(file, features):
 
     for index, row in csv.iterrows():
 
-        text = specialTokenDict['eos']
+        text = featureDict['eos']
         for feature in features:
             if feature == 'name':
-                text+= ' ' + specialTokenDict['name'] + ' ~ '
+                text+= ' ' + featureDict['name'] + ' ~ '
                 continue
             info = str(row[feature])
             info = info.replace(row['name'], '~')
-            text += ' ' + specialTokenDict[feature] + ' ' + info + ' '
+            text += ' ' + featureDict[feature] + ' ' + info + ' '
             
-        text += specialTokenDict['eos']
+        text += featureDict['eos']
 
         data.append(np.array(wrapped_tokenizer(text)['input_ids'], dtype=np.int64))
 
@@ -87,13 +98,13 @@ def getCorpus(csv):
     for index, row in df.iterrows():
         text= ''
         name = row['name']
-        for feature in specialTokenDict:
-            if feature not in row:
-                continue
-            append =' ' + specialTokenDict[feature] + ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else ''
+        for feature in featureDict:
+            append = ' ' +featureDict[feature] 
+            if feature in row:
+                append += ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else '' 
             if not feature == 'name':
                 append = append.replace(name, '~')
-            text +=  append
+            text +=  append + ' ' + featureDict[feature][:1] + '\\' + featureDict[feature][1:]
         corpus.append(sanitize(text[1:]) + specialTokenDict['eos'])
 
     f = open('corpus.csv', 'w', encoding='utf-8')
@@ -124,7 +135,7 @@ def createTokenizer(csv = 'cards.csv', k = 30_000):
 
     corpus = getCorpus(csv)
 
-    special_tokens = [specialTokenDict[key] for key in specialTokenDict] 
+    special_tokens = [featureDict[key] for key in featureDict] 
 
     tokenizer = Tokenizer(models.BPE())
     tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=True)

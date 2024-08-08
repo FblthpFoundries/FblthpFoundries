@@ -5,7 +5,7 @@ from datasets import load_dataset
 from transformers import DataCollatorForLanguageModeling
 device = 'cuda'
 block_size = 256
-num_epochs = 10
+num_epochs = 20
 
 #https://huggingface.co/docs/transformers/tasks/language_modeling
 
@@ -79,7 +79,7 @@ def gen():
         **encoded_input,
         do_sample=True,
         temperature = 0.9,
-        max_length =200,
+        max_length =400,
     )
     print(tokenizer.batch_decode(output)[0])
 

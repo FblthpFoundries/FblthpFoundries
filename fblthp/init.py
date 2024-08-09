@@ -16,7 +16,7 @@ r.close()
 
 #https://scryfall.com/docs/api/cards Currently only loading creatures
 
-features = ['mana_cost', 'name', 'type_line', 'power', 'toughness', 'oracle_text', 'flavor_text']
+features = ['mana_cost', 'name', 'type_line', 'power', 'toughness', 'oracle_text', 'loyalty', 'flavor_text']
 
 cardNums = len(cards)
 
@@ -31,9 +31,10 @@ data = data[:-1]
 
 f.write(data)
 
+
 for card in cards:
     num  += 1
-    if 'Creature' not in card['type_line'] or 'Token' in card['type_line'] or 'card_faces' in card:
+    if  'Token' in card['type_line'] or 'card_faces' in card:
         continue
     data = '\n'
     for feature in features:

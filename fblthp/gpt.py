@@ -5,7 +5,7 @@ from datasets import load_dataset
 from transformers import DataCollatorForLanguageModeling
 device = 'cuda'
 block_size = 256
-num_epochs = 20
+num_epochs = 5
 
 #https://huggingface.co/docs/transformers/tasks/language_modeling
 
@@ -71,8 +71,8 @@ def train():
 
 def gen():
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
-    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-6000')
-    text = "<tl>"
+    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-8000')
+    text = "<tl> Legendary Planeswalker"
     encoded_input = tokenizer(text, return_tensors='pt').to(device)
     model.to(device)
     output = model.generate(

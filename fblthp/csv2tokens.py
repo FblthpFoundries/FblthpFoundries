@@ -16,6 +16,7 @@ featureDict ={
     'oracle_text': '<ot>',
     'power': '<power>',
     'toughness': '<toughness>',
+    'loyalty' : '<loyalty>',
     'flavor_text': '<ft>',
     
 }
@@ -27,6 +28,7 @@ specialTokenDict = {
     'oracle_text': '<ot>',
     'power': '<power>',
     'toughness': '<toughness>',
+    'loyalty' : '<loyalty>',
     'flavor_text': '<ft>',
     'eos' : '<eos>',
     'pad_token' : '<pad>',

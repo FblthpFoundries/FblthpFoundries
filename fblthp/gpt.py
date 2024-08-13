@@ -71,7 +71,7 @@ def train():
 
 def gen():
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
-    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-8000')
+    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-7000')
     text = "<tl> Legendary Planeswalker"
     encoded_input = tokenizer(text, return_tensors='pt').to(device)
     model.to(device)

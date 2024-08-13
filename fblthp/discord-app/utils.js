@@ -55,7 +55,7 @@ export function generateCard(options){
 
   var settings = ''
 
-  const tl = options[0].value
+  const tl = (options)?options[0].value : null
 
   if (tl){
     settings += ` -tl \"${tl}\"`

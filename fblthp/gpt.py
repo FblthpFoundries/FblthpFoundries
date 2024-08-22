@@ -83,5 +83,7 @@ def gen():
     )
     print(tokenizer.batch_decode(output)[0])
 
+    model.push_to_hub('FblthpAI/magic_model')
+
 if __name__ == '__main__':
     gen()

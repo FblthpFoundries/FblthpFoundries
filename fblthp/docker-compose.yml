@@ -1,0 +1,27 @@
+services:
+    server:
+        build: card-server/
+        command:  python -m flask run -p 5001 
+        ports:
+            - 5001:5001
+
+        environment:
+            - FLASK_APP=card-server
+            - FLASK_ENV=development
+
+        volumes:
+            - card-storage:/root/.cache
+            - pip-installs:/usr/local/lib/python3.12/site-packages
+
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        -   driver: nvidia
+                            count: 1
+                            capabilities: [gpu]
+    
+volumes:
+    card-storage:
+    pip-installs:
+

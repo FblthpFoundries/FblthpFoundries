@@ -4,7 +4,22 @@ import re
 from diffusers import StableDiffusion3Pipeline
 import torch
 from transformers import set_seed
+import requests
+def fetch_card_types():
+    response = requests.get("https://api.scryfall.com/catalog/card-types")
+    if response.status_code == 200:
+        return response.json()['data']
+    else:
+        raise Exception("Failed to fetch card types from Scryfall")
 
+# Function to fetch creature types from Scryfall API
+def fetch_creature_types():
+    response = requests.get("https://api.scryfall.com/catalog/creature-types")
+    if response.status_code == 200:
+        return response.json()['data']
+    else:
+        raise Exception("Failed to fetch creature types from Scryfall")
+    
 def parse_card_data(input_text):
     cards = []
     
@@ -53,40 +68,106 @@ def parse_card_data(input_text):
         cards.append(card)
     
     return cards
-if __name__ == '__main__':
+
+def extract_keywords(card_info, card_types_list, creature_types_list):
+    card_types = []
+    subtypes = []
+    description_parts = []
+    intermediate = card_info['type_line'].split("—")
+    if len(intermediate) == 1:
+        card_types = intermediate[0].strip().split(" ")
+        subtypes = []
+    else:
+        card_types = intermediate[0].strip().split(" ")
+        subtypes = intermediate[1].strip().split(" ")
+
+    # Identify one-word abilities from the oracle text
+    abilities = {
+        "flying": "soaring through the sky",
+        "first strike": "ready to strike first",
+        "double strike": "attacking with double force",
+        "lifelink": "radiating a life-sustaining aura",
+        "trample": "crushing everything underfoot",
+        "deathtouch": "deadly to the touch",
+        "haste": "moving with incredible speed",
+        "hexproof": "surrounded by a protective aura",
+        "indestructible": "impervious to damage",
+        "vigilance": "ever-watchful and alert",
+        "menace": "with a fearsome presence",
+        "reach": "extending its reach far and wide",
+        "flash": "appearing in a flash of light",
+    }
+    included_abilities = [description for ability, description in abilities.items() if ability in card_info['oracle_text'].lower()]
+
+    # Identify colors from mana cost
+    colors = {
+        '<W>': "white",
+        '<U>': "blue",
+        '<B>': "black",
+        '<R>': "red",
+        '<G>': "green",
+        '<C>': "colorless"
+    }
+    color_identity = []
+    for symbol, color_name in colors.items():
+        if symbol in card_info['mana_cost']:
+            color_identity.append(color_name)
+
+    if color_identity:
+        color_identity_str = " and ".join(color_identity)
+        description_parts.append(f"The art has a {color_identity_str} color theme")
+
+    # Describe size based on power/toughness
+    if card_info['power'] and card_info['toughness']:
+        power = int(card_info['power'])
+        toughness = int(card_info['toughness'])
+
+        if power >= 5 or toughness >= 5:
+            size_description = "of immense size, towering over the landscape"
+        elif power >= 3 or toughness >= 3:
+            size_description = "of considerable size, imposing and strong"
+        else:
+            size_description = "smaller in stature, but agile and fierce"
+
+        description_parts.append(size_description)
+
+    # Construct the main description
+    if card_types:
+
+        card_type_str = " ".join([k for k in card_types]).lower().strip()
+        specific_type_str = " ".join([k for k in subtypes]).lower().strip()
+
+        renames = {
+            'creature': 'character',
+            'sorcery': 'spell',
+            'instant': 'cantrip spell',
+            'planeswalker': 'powerful character',
+            'legendary': ''
+        }
+        for k in renames:
+            card_type_str = card_type_str.replace(k, renames[k])
+
+        description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}") + f" named {card_info['name']}"
+
+        if included_abilities:
+            ability_str = ", ".join(included_abilities)
+            description += f", {ability_str}"
+
+        description_parts.insert(0, description)
+
     
-    parser = argparse.ArgumentParser(description='Generate Magic the Gathering cards')
-    parser.add_argument('--text_start', type=str, default='<tl>', help='The text to start the generation with')
-    parser.add_argument('--max_length', type=int, default=400, help='The maximum length of the generated text')
-    parser.add_argument('--gen_art', action='store_true', help='Generate art for the card')
-    parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint')
-    parser.add_argument('--seed', type=int, default=None, help='The random seed')
-    args = parser.parse_args()
-    if args.seed:
-        set_seed(args.seed)
-    output = gen(
-        text_start=args.text_start,
-        max_length=args.max_length,
-        model_path=args.model_path
-    )
-    #output = "<tl> Creature — Vampire Rogue <\\tl> <name> Vengeful Rogue <\\name> <mc> <3> <B> <\\mc> <ot> <T>: Draw a card, then discard a card. <\\ot> <power> 4 <\\power> <toughness> 4 <\\toughness> <loyalty> <\\loyalty> <ft> The greatest evil lies behind all the shadows and shadows in my mind, and all I fear is not death, but only peace. <nl> —The Dark Path of the Eternals <\\ft><eos><tl> Creature — Bird Soldier <\\tl> <name> Gullwing Pilot <\\name> <mc> <4> <W> <\\mc> <ot> Flying <nl> Whenever ~ deals combat damage to a player, destroy target nonland permanent. <\\ot> <power> 3 <\\power> <toughness> 3 <\\toughness> <loyalty> <\\loyalty> <ft> When not flying, he rides to the skies. <nl> —Oedipus <\\ft><eos><tl> Artifact <\\tl> <name> Sword of the Eternals <\\name> <mc> <3> <\\mc> <ot> <T>: Target creature you control gets +2/+2 until end of turn. <\\ot> <power> <\\power> <toughness> <\\toughness> <loyalty> <\\loyalty> <ft> This sword is the first gift we have given to ourselves in this world. <\\ft><eos><tl> Legendary Creature — Shapeshifter <\\tl> <name> Chandra, Witch's Apprentice <\\name> <mc> <X> <U> <B> <G"
-    #print(output)
-    #bs = BeautifulSoup(output, 'lxml')
-    #print(bs.get_text())
-    parsed = parse_card_data(output.split("<eos>")[0])[0]
+    # Combine all description parts into a final prompt
+    prompt = ". ".join(description_parts)
+    prompt += ". Rendered in high fantasy style with intricate details, dynamic composition, and a mix of dark and vibrant colors. The scene should feature an immersive landscape."
 
-    [print(f"{key}: {value}") for key, value in parsed.items()]
+    # Include flavor text if available
+    # if card_info['flavor_text']:
+    #     prompt += f'{card_info["flavor_text"]}'
 
 
-    pipe = StableDiffusion3Pipeline.from_pretrained(
-    "stabilityai/stable-diffusion-3-medium-diffusers",
-    text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
-    #tokenizer_3=None,
-    torch_dtype=torch.float16
-    )
+    return prompt
 
-    pipe = pipe.to("cuda")
-
+def extract_keywords_old(card):
     colormap = {
         "White": "<W>",
         "Blue": "<U>",
@@ -129,25 +210,63 @@ if __name__ == '__main__':
 
     color = ', '.join(color_words)
     if color:
-        prompt += f" The background features a landscape with the color{"s" if len(color_words) > 1 else ""} {', '.join(color_words)}. There is a sky as well. Keep the background neutral."
+        prompt += f" The background features a landscape. There is a themed sky as well. Use the color{"s" if len(color_words) > 1 else ""} {', '.join(color_words)}."
     else:
-        prompt += f" The background features a landscape with the color grey. There is a sky as well. Keep the background neutral."
+        prompt += f" The background features a landscape. There is a themed sky as well. Use grey colors in the art."
     
 
     
     if parsed['flavor_text']:
         prompt += " " + parsed['flavor_text']
+    return prompt
+if __name__ == '__main__':
+    
+    parser = argparse.ArgumentParser(description='Generate Magic the Gathering cards')
+    parser.add_argument('--text_start', type=str, default='<tl>', help='The text to start the generation with')
+    parser.add_argument('--max_length', type=int, default=400, help='The maximum length of the generated text')
+    parser.add_argument('--gen_art', action='store_true', help='Generate art for the card')
+    parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint')
+    parser.add_argument('--seed', type=int, default=None, help='The random seed')
+    args = parser.parse_args()
+    if args.seed:
+        set_seed(args.seed)
+    output = gen(
+        text_start=args.text_start,
+        max_length=args.max_length,
+        model_path=args.model_path
+    )
+
+    parsed = parse_card_data(output.split("<eos>")[0])[0]
+
+    print(parsed)
+
+    [print(f"{key}: {value}") for key, value in parsed.items()]
 
 
-    print()
+    
 
-    print(prompt)
+    prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types())
+
+    print(f"Prompt: {prompt}")
+
     if args.gen_art:
+
+        pipe = StableDiffusion3Pipeline.from_pretrained(
+            "stabilityai/stable-diffusion-3-medium-diffusers",
+            #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
+            #tokenizer_3=None,
+            torch_dtype=torch.float16
+            )
+        pipe.enable_model_cpu_offload()
+
+        #pipe = pipe.to("cuda")
+
+
+
         img = pipe(
                 prompt=prompt,
-                negative_prompt="cartoon",
                 num_images_per_prompt=1,
-                num_inference_steps=35,
+                num_inference_steps=30,
                 height=800,
                 width=1024
             ).images[0]

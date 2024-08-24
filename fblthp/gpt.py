@@ -50,7 +50,7 @@ def train():
     print(lm_dataset['train'][0])
 
     train_args = TrainingArguments(
-        output_dir = 'magic_model',
+        output_dir = 'magic_mike',
         learning_rate = 2e-5,
         weight_decay = 0.01,
         push_to_hub = False,
@@ -69,21 +69,25 @@ def train():
     trainer.train()
 
 
-def gen():
+def gen(
+        text_start = "<tl>",
+        max_length = 400,
+        model_path = './magic_model/'
+):
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
-    model = AutoModelForCausalLM.from_pretrained('magic_model/checkpoint-7000')
-    text = "<tl> Legendary Planeswalker"
-    encoded_input = tokenizer(text, return_tensors='pt').to(device)
+    model = AutoModelForCausalLM.from_pretrained(model_path)
+    encoded_input = tokenizer(text_start, return_tensors='pt').to(device)
     model.to(device)
     output = model.generate(
         **encoded_input,
         do_sample=True,
         temperature = 0.9,
-        max_length =400,
+        max_length = max_length,
     )
-    print(tokenizer.batch_decode(output)[0])
+    return tokenizer.batch_decode(output)[0]
 
-    model.push_to_hub('FblthpAI/magic_model')
+    #model.push_to_hub('FblthpAI/magic_model')
 
 if __name__ == '__main__':
-    gen()
+    #train()
+    print(gen(model_path="./magic_mike/checkpoint-8500").split("<eos>")[0])

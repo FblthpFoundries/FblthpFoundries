@@ -3,3 +3,4 @@ fblthp/magic_mike/*
 cards.csv
 corpus.csv
 *.pyc
+fblthp/art/*

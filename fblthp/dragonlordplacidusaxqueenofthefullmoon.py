@@ -5,6 +5,9 @@ from diffusers import StableDiffusion3Pipeline
 import torch
 from transformers import set_seed
 import requests
+
+SUPPORTED_MODELS = ["SD3", "DALL-E"]
+
 def fetch_card_types():
     response = requests.get("https://api.scryfall.com/catalog/card-types")
     if response.status_code == 200:
@@ -69,7 +72,7 @@ def parse_card_data(input_text):
     
     return cards
 
-def extract_keywords(card_info, card_types_list, creature_types_list):
+def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3"):
     card_types = []
     subtypes = []
     description_parts = []
@@ -115,7 +118,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list):
 
     if color_identity:
         color_identity_str = " and ".join(color_identity)
-        description_parts.append(f"The art has a {color_identity_str} color theme")
+        description_parts.append(f"The image has a {color_identity_str} color theme")
 
     # Describe size based on power/toughness
     if card_info['power'] and card_info['toughness']:
@@ -147,7 +150,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list):
         for k in renames:
             card_type_str = card_type_str.replace(k, renames[k])
 
-        description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}") + f" named {card_info['name']}"
+        description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}") + f", {card_info['name']}"
 
         if included_abilities:
             ability_str = ", ".join(included_abilities)
@@ -158,7 +161,9 @@ def extract_keywords(card_info, card_types_list, creature_types_list):
     
     # Combine all description parts into a final prompt
     prompt = ". ".join(description_parts)
-    prompt += ". Rendered in high fantasy style with intricate details, dynamic composition, and a mix of dark and vibrant colors. The scene should feature an immersive landscape."
+    prompt += ". Rendered in high fantasy digital art style with intricate details, dynamic composition, and a mix of dark and vibrant colors. Immersive landscape."
+    if model == "DALL-E":
+        prompt += " Do not include any text or labels in the image."
 
     # Include flavor text if available
     # if card_info['flavor_text']:
@@ -227,7 +232,9 @@ if __name__ == '__main__':
     parser.add_argument('--gen_art', action='store_true', help='Generate art for the card')
     parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint')
     parser.add_argument('--seed', type=int, default=None, help='The random seed')
+    parser.add_argument('--art_model', type=str, default='SD3', help='The art model to prompt')
     args = parser.parse_args()
+    assert args.art_model in SUPPORTED_MODELS, f"Art model {args.art_model} is not supported. Supported models are {", ".join(SUPPORTED_MODELS)}"
     if args.seed:
         set_seed(args.seed)
     output = gen(
@@ -245,7 +252,7 @@ if __name__ == '__main__':
 
     
 
-    prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types())
+    prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types(), model=args.art_model)
 
     print(f"Prompt: {prompt}")
 

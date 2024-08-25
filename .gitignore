@@ -4,3 +4,4 @@ cards.csv
 corpus.csv
 *.pyc
 fblthp/art/*
+fblthp/constants.py

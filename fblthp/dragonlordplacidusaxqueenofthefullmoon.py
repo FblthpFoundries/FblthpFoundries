@@ -5,6 +5,9 @@ from diffusers import StableDiffusion3Pipeline
 import torch
 from transformers import set_seed
 import requests
+from constants import API_KEY
+from openai import OpenAI
+import time
 
 SUPPORTED_MODELS = ["SD3", "DALL-E"]
 
@@ -92,7 +95,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
         "lifelink": "radiating a life-sustaining aura",
         "trample": "crushing everything underfoot",
         "deathtouch": "deadly to the touch",
-        "haste": "moving with incredible speed",
+        "haste": "moving with incredible speed yet sharp in focus",
         "hexproof": "surrounded by a protective aura",
         "indestructible": "impervious to damage",
         "vigilance": "ever-watchful and alert",
@@ -141,7 +144,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
         specific_type_str = " ".join([k for k in subtypes]).lower().strip()
 
         renames = {
-            'creature': 'character',
+            'creature': '',
             'sorcery': 'spell',
             'instant': 'cantrip spell',
             'planeswalker': 'powerful character',
@@ -149,6 +152,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
         }
         for k in renames:
             card_type_str = card_type_str.replace(k, renames[k])
+        card_type_str = card_type_str.strip()
 
         description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}") + f", {card_info['name']}"
 
@@ -257,25 +261,48 @@ if __name__ == '__main__':
     print(f"Prompt: {prompt}")
 
     if args.gen_art:
+        if args.art_model == "SD3":
+            pipe = StableDiffusion3Pipeline.from_pretrained(
+                "stabilityai/stable-diffusion-3-medium-diffusers",
+                #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
+                #tokenizer_3=None,
+                torch_dtype=torch.float16
+                )
+            pipe.enable_model_cpu_offload()
 
-        pipe = StableDiffusion3Pipeline.from_pretrained(
-            "stabilityai/stable-diffusion-3-medium-diffusers",
-            #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
-            #tokenizer_3=None,
-            torch_dtype=torch.float16
+            #pipe = pipe.to("cuda")
+
+
+
+            img = pipe(
+                    prompt=prompt,
+                    num_images_per_prompt=1,
+                    num_inference_steps=30,
+                    height=800,
+                    width=1024
+                ).images[0]
+            
+            img.save(f"art/{parsed['name']}.png")
+        if args.art_model == "DALL-E":
+            print("Sending request to OpenAI API... (commonly 15 second turnaround)")
+            t1 = time.time()
+            client = OpenAI(
+                api_key=API_KEY
             )
-        pipe.enable_model_cpu_offload()
-
-        #pipe = pipe.to("cuda")
-
-
-
-        img = pipe(
+            response = client.images.generate(
+                model="dall-e-3",
                 prompt=prompt,
-                num_images_per_prompt=1,
-                num_inference_steps=30,
-                height=800,
-                width=1024
-            ).images[0]
-        
-        img.save(f"art/{parsed['name']}.png")
+                size="1024x1024",
+                quality="standard",
+                n=1
+            )
+            image_url = response.data[0].url
+            
+
+
+            # Download the image and save it
+            image_data = requests.get(image_url).content
+            with open(f'art/{parsed['name']}.png', 'wb') as file:
+                file.write(image_data)
+            t2 = time.time()
+            print(f"Image saved successfully! ({t2-t1:.3f}s)")

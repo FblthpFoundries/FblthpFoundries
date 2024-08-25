@@ -5,7 +5,6 @@ from diffusers import StableDiffusion3Pipeline
 import torch
 from transformers import set_seed
 import requests
-from constants import API_KEY
 from openai import OpenAI
 import time
 
@@ -76,9 +75,12 @@ def parse_card_data(input_text):
     return cards
 
 def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3"):
+
     card_types = []
     subtypes = []
     description_parts = []
+    object_description = ""
+
     intermediate = card_info['type_line'].split("—")
     if len(intermediate) == 1:
         card_types = intermediate[0].strip().split(" ")
@@ -87,23 +89,105 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
         card_types = intermediate[0].strip().split(" ")
         subtypes = intermediate[1].strip().split(" ")
 
-    # Identify one-word abilities from the oracle text
-    abilities = {
-        "flying": "soaring through the sky",
-        "first strike": "ready to strike first",
-        "double strike": "attacking with double force",
-        "lifelink": "radiating a life-sustaining aura",
-        "trample": "crushing everything underfoot",
-        "deathtouch": "deadly to the touch",
-        "haste": "moving with incredible speed yet sharp in focus",
-        "hexproof": "surrounded by a protective aura",
-        "indestructible": "impervious to damage",
-        "vigilance": "ever-watchful and alert",
-        "menace": "with a fearsome presence",
-        "reach": "extending its reach far and wide",
-        "flash": "appearing in a flash of light",
-    }
-    included_abilities = [description for ability, description in abilities.items() if ability in card_info['oracle_text'].lower()]
+
+    priority_list = ["Creature", "Artifact", "Enchantment", "Instant", "Sorcery", "Planeswalker", "Land"]
+    megatype = None
+
+    for p in priority_list:
+        if p in card_types:
+            megatype = p
+            card_types.remove(p)
+            break
+    if not megatype:
+        return False, None
+    
+    match megatype:
+        case "Creature":
+            
+            if not card_info['power'] or not card_info['toughness'] or not subtypes:
+                return False, None
+            pronoun = "It"
+            if re.search(r'\b(they|their)\b', card_info['flavor_text'], re.IGNORECASE) is not None:
+                pronoun = "They" # Pandering to the WOKE MOB of LIBERALS
+            if re.search(r'\b(she|her)\b', card_info['flavor_text'], re.IGNORECASE) is not None:
+                pronoun = "She"
+            if re.search(r'\b(he|him)\b', card_info['flavor_text'], re.IGNORECASE) is not None:
+                pronoun = "He"
+            
+            
+            object_description = f"The foreground features a/an {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
+            if "Legendary" in card_types:
+                object_description += " Very powerful."
+            if "Artifact" in card_types:
+                object_description += " Metallic in nature."
+            if "Enchantment" in card_types:
+                object_description += " Divine, mythical, spirit-like in nature."
+            if "Land" in card_types:
+                object_description += " Embodies the raw power of the land."
+
+            
+            # Identify one-word abilities from the oracle text
+            abilities = {
+                "flying": "soaring through the sky",
+                "first strike": "ready to strike first",
+                "double strike": "attacking with double force",
+                "lifelink": "radiating a life-sustaining aura",
+                "trample": "crushing everything underfoot",
+                "deathtouch": "deadly to the touch",
+                "haste": "moving with incredible speed yet sharp in focus",
+                "hexproof": "surrounded by a protective aura",
+                "indestructible": "impervious to damage",
+                "vigilance": "ever-watchful and alert",
+                "menace": "with a fearsome presence",
+                "reach": "extending its reach far and wide",
+                "flash": "appearing in a flash of light",
+            }
+            included_abilities = [description for ability, description in abilities.items() if ability in card_info['oracle_text'].lower()]
+            if included_abilities:
+                object_description += f" {pronoun} is " + ", ".join(included_abilities) + "."
+
+            # Describe size based on power/toughness
+            power = int(card_info['power'])
+            toughness = int(card_info['toughness'])
+            avg = (power + toughness)//2
+
+            if avg >= 8:
+                size_description = f"{pronoun} is of immense size, towering over the landscape."
+            elif avg >= 4:
+                size_description = f"{pronoun} is of considerable size, imposing and strong."
+            elif avg >= 2:
+                size_description = f"{pronoun} is of medium stature."
+            else:
+                size_description = f"{pronoun} is smaller in stature, but agile and fierce."
+
+            object_description += " " + size_description
+
+            description_parts.append("The background features an immersive landscape and scenery.")
+        case "Artifact":
+            object_description = f"An artifact, {card_info['name'].lower()}."
+            if "Legendary" in card_types:
+                object_description += " Very powerful and ornate."
+                description_parts.append("The background features a mystical, ancient workshop, surrounded by the remnants of forgotten civilizations.")
+            
+        case "Enchantment":
+            object_description = f"An enchantment, {card_info['name'].lower()}."
+            if "Legendary" in card_types:
+                object_description += " Very powerful and mystical."
+            description_parts.append("The background features a mystical landscape hinting at the presence of powerful, ongoing magic.")
+        case "Instant":
+            object_description = f"A quick spell, {card_info['name'].lower()}."
+            description_parts.append("The background features a mystical environment reacting to the sudden burst of energy from the spell.")
+        case "Sorcery":
+            object_description = f"A powerful spell, {card_info['name'].lower()}."
+            description_parts.append("The background features a grand ritual site, with the ground and air altered by the massive spell being cast.")
+        case "Planeswalker":
+            object_description = f"A powerful being, {card_info['name'].lower()}."
+            description_parts.append("The background features an epic, otherworldly landscape.")
+            
+
+    
+
+    
 
     # Identify colors from mana cost
     colors = {
@@ -118,70 +202,28 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
     for symbol, color_name in colors.items():
         if symbol in card_info['mana_cost']:
             color_identity.append(color_name)
-
     
-
-    # Describe size based on power/toughness
-    if card_info['power'] and card_info['toughness']:
-        power = int(card_info['power'])
-        toughness = int(card_info['toughness'])
-        avg = (power + toughness)//2
-
-        if avg >= 8:
-            size_description = "of immense size, towering over the landscape"
-        elif avg >= 4:
-            size_description = "of considerable size, imposing and strong"
-        elif avg >= 2:
-            size_description = "of medium stature"
-        else:
-            size_description = "smaller in stature, but agile and fierce"
-
-        description_parts.append(size_description)
 
     if color_identity:
         color_identity_str = " and ".join(color_identity)
-        description_parts.append(f"The image has a {color_identity_str} color theme")
+        description_parts.append(f"The image has a {color_identity_str} color theme.")
 
-    # Construct the main description
-    if card_types:
-
-        card_type_str = " ".join([k for k in card_types]).lower().strip()
-        specific_type_str = " ".join([k for k in subtypes]).lower().strip()
-
-        renames = {
-            'creature': '',
-            'sorcery': 'spell',
-            'instant': 'cantrip spell',
-            'planeswalker': 'powerful character',
-            'legendary': ''
-        }
-        for k in renames:
-            card_type_str = card_type_str.replace(k, renames[k])
-        card_type_str = card_type_str.strip()
-
-        description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}, {card_info['name']}")
-
-        if included_abilities:
-            ability_str = ", ".join(included_abilities)
-            description += f", {ability_str}"
-
-        description_parts.insert(0, description)
+    prompt = object_description  + (" " if description_parts else "") +  " ".join(description_parts)
 
     
     # Combine all description parts into a final prompt
-    prompt = ". ".join(description_parts)
     if model == "DALL-E":
-        prompt += ". Rendered in high fantasy digital art style with dynamic composition and a mix of colors. Immersive landscape and scenery."
+        prompt += " Rendered in high fantasy digital art style with dynamic composition and a mix of colors."
         prompt += " Do not include any text or labels in the image."
     else:
-        prompt += ". Rendered in high fantasy digital art style with intricate details, dynamic composition, and a mix of dark and vibrant colors. Immersive landscape."
+        prompt += " Rendered in high fantasy digital art style with intricate details, dynamic composition, and a mix of dark and vibrant colors. Immersive landscape."
 
     # Include flavor text if available
     # if card_info['flavor_text']:
     #     prompt += f'{card_info["flavor_text"]}'
 
 
-    return prompt
+    return True, prompt
 
 def extract_keywords_old(card):
     colormap = {
@@ -245,80 +287,92 @@ if __name__ == '__main__':
     parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint')
     parser.add_argument('--seed', type=int, default=None, help='The random seed')
     parser.add_argument('--art_model', type=str, default='SD3', help='The art model to prompt')
+    parser.add_argument('--iterations', type=int, default=1, help='The number of iterations to run')
     args = parser.parse_args()
     assert args.art_model in SUPPORTED_MODELS, f"Art model {args.art_model} is not supported. Supported models are {", ".join(SUPPORTED_MODELS)}"
-    if not args.prompt:
-        if args.seed:
-            set_seed(args.seed)
-        output = gen(
-            text_start=args.text_start,
-            max_length=args.max_length,
-            model_path=args.model_path
-        )
 
-        parsed = parse_card_data(output.split("<eos>")[0])[0]
-
-        print(parsed)
-
-        [print(f"{key}: {value}") for key, value in parsed.items()]
-
-
-        
-
-        prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types(), model=args.art_model)
-        name = parsed['name']
-        print(f"Extracted art prompt: {prompt}")
-    else:
-        prompt = args.prompt
-        name = prompt[:20]
-        print(f"Overriding card generation and using custom prompt: {prompt}")
-        
-
-    
-
-    if args.gen_art:
-        if args.art_model == "SD3":
-            pipe = StableDiffusion3Pipeline.from_pretrained(
-                "stabilityai/stable-diffusion-3-medium-diffusers",
-                #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
-                #tokenizer_3=None,
-                torch_dtype=torch.float16
+    for i in range(args.iterations):
+        print(f"\nStarting card {i+1}/{args.iterations}")
+        if not args.prompt:
+            success = False
+            while not success:
+                if args.seed:
+                    set_seed(args.seed)
+                output = gen(
+                    text_start=args.text_start,
+                    max_length=args.max_length,
+                    model_path=args.model_path
                 )
-            pipe.enable_model_cpu_offload()
 
-            #pipe = pipe.to("cuda")
+                parsed = parse_card_data(output.split("<eos>")[0])[0]
+
+                print(parsed)
+
+                [print(f"{key}: {value}") for key, value in parsed.items()]
+
+
+                
+
+                success, prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types(), model=args.art_model)
+            name = parsed['name']
+            print(f"\nExtracted art prompt: {prompt}")
+        else:
+            prompt = args.prompt
+            name = prompt[:20]
+            print(f"\nOverriding card generation and using custom prompt: {prompt}")
+            
+
+        
+
+        if args.gen_art:
+            if args.art_model == "SD3":
+                pipe = StableDiffusion3Pipeline.from_pretrained(
+                    "stabilityai/stable-diffusion-3-medium-diffusers",
+                    #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
+                    #tokenizer_3=None,
+                    torch_dtype=torch.float16
+                    )
+                pipe.enable_model_cpu_offload()
+
+                #pipe = pipe.to("cuda")
 
 
 
-            img = pipe(
+                img = pipe(
+                        prompt=prompt,
+                        num_images_per_prompt=1,
+                        num_inference_steps=30,
+                        height=800,
+                        width=1024
+                    ).images[0]
+                
+                img.save(f"art/SD3/{name}.png")
+            if args.art_model == "DALL-E":
+                try:
+                    from constants import API_KEY
+                except:
+                    raise Exception("constants.py not found. Please rename constants_example.py to constants.py and add your OpenAI API key to use DALL-E for image generation.")
+                
+                assert API_KEY != "your-api-key-here", "Please add your OpenAI API key to constants.py"
+                print("Sending request to OpenAI API... (commonly ~15 second turnaround)")
+                t1 = time.time()
+                client = OpenAI(
+                    api_key=API_KEY
+                )
+                response = client.images.generate(
+                    model="dall-e-3",
                     prompt=prompt,
-                    num_images_per_prompt=1,
-                    num_inference_steps=30,
-                    height=800,
-                    width=1024
-                ).images[0]
-            
-            img.save(f"art/SD3/{name}.png")
-        if args.art_model == "DALL-E":
-            print("Sending request to OpenAI API... (commonly ~15 second turnaround)")
-            t1 = time.time()
-            client = OpenAI(
-                api_key=API_KEY
-            )
-            response = client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1024",
-                quality="standard",
-                n=1
-            )
-            image_url = response.data[0].url
-            
-
-
-            # Download the image and save it
-            image_data = requests.get(image_url).content
-            with open(f'art/DALL-E/{name}.png', 'wb') as file:
-                file.write(image_data)
-            t2 = time.time()
-            print(f"Image saved successfully! ({t2-t1:.3f}s)")
+                    size="1024x1024",
+                    quality="standard",
+                    n=1
+                )
+                image_url = response.data[0].url
+                
+                # Download the image and save it
+                image_data = requests.get(image_url).content
+                with open(f'art/DALL-E/{name}.png', 'wb') as file:
+                    file.write(image_data)
+                with open(f'art/DALL-E/{name}.txt', 'w') as file:
+                    file.write(prompt)
+                t2 = time.time()
+                print(f"Image saved successfully! ({t2-t1:.3f}s)")

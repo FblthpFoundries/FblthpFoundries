@@ -100,7 +100,26 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
             break
     if not megatype:
         return False, None
-    
+    # if megatype != "Enchantment": #DEBUG
+    #     return False, None
+
+    # Identify colors from mana cost
+    colors = {
+        '<W>': "white",
+        '<U>': "blue",
+        '<B>': "black",
+        '<R>': "red",
+        '<G>': "green",
+        '<C>': "colorless"
+    }
+    color_identity = []
+    for symbol, color_name in colors.items():
+        if symbol in card_info['mana_cost']:
+            color_identity.append(color_name)
+    if not color_identity:
+        color_identity.append("gray")
+    color_identity_str = " and ".join(color_identity)
+
     match megatype:
         case "Creature":
             
@@ -115,7 +134,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
                 pronoun = "He"
             
             
-            object_description = f"The foreground features a/an {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
+            object_description = f"The foreground features a {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
             if "Legendary" in card_types:
                 object_description += " Very powerful."
             if "Artifact" in card_types:
@@ -161,62 +180,83 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
                 size_description = f"{pronoun} is smaller in stature, but agile and fierce."
 
             object_description += " " + size_description
-
-            description_parts.append("The background features an immersive landscape and scenery.")
+            description_parts.append(f"{pronoun} has a {color_identity_str} color theme.")
+            description_parts.append("The background features immersive scenery.")
+            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a gradient of colors.")
+            
         case "Artifact":
-            object_description = f"An artifact, {card_info['name'].lower()}."
+            object_description = f"An artifact, {card_info['name'].lower()}. Reminiscent of steampunk."
             if "Legendary" in card_types:
                 object_description += " Very powerful and ornate."
-                description_parts.append("The background features a mystical, ancient workshop, surrounded by the remnants of forgotten civilizations.")
+            description_parts.append(f"The artifact has a {color_identity_str} color theme.")
+            description_parts.append("The background features a mystical, ancient workshop, surrounded by the remnants of forgotten civilizations.")
+            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a mix of colors.")
+            
             
         case "Enchantment":
-            object_description = f"An enchantment, {card_info['name'].lower()}."
+            object_description = f"The foreground features an enchantment, reminiscent of {card_info['name'].lower()}."
+            if "Aura" in subtypes:
+                if "enchant " not in card_info['oracle_text'].lower():
+                    return False, None
+                targets = {
+                    "creature": "person",
+                    "land": "land",
+                    "artifact": "artifact",
+                    "planeswalker": "powerful being",
+                    "player": "powerful being"
+                }
+                target = card_info['oracle_text'].lower().split('enchant ')[1].strip()
+                target = target.split(" ")[0]
+                object_description = f"A {targets[target]} reminiscent of fantasy surrounded or affected by an aura of enchantment. The enchantment is strongly reminiscent of {card_info['name'].lower()}."
             if "Legendary" in card_types:
                 object_description += " Very powerful and mystical."
-            description_parts.append("The background features a mystical landscape hinting at the presence of powerful, ongoing magic.")
-        case "Instant":
-            object_description = f"A quick spell, {card_info['name'].lower()}."
-            description_parts.append("The background features a mystical environment reacting to the sudden burst of energy from the spell.")
-        case "Sorcery":
-            object_description = f"A powerful spell, {card_info['name'].lower()}."
-            description_parts.append("The background features a grand ritual site, with the ground and air altered by the massive spell being cast.")
-        case "Planeswalker":
-            object_description = f"A powerful being, {card_info['name'].lower()}."
-            description_parts.append("The background features an epic, otherworldly landscape.")
             
-
+            description_parts.append(f"The enchantment has some {color_identity_str} color themes.")
+            if "green" in color_identity_str:
+                description_parts.append("Forestry, nature, woods, life, growth, and the cycle of life can be minor themes in the art.")
+            if "blue" in color_identity_str:
+                description_parts.append("Oceans, water, skies, dreams, and illusions can be minor themes in the art.")
+            if "red" in color_identity_str:
+                description_parts.append("Fire, passion, chaos, and destruction can be minor themes in the art.")
+            if "black" in color_identity_str:
+                description_parts.append("Death, decay, darkness, and the macabre can be minor themes in the art.")
+            if "white" in color_identity_str:
+                description_parts.append("Order, purity, light, and protection can be minor themes in the art.")
+            if "gray" in color_identity_str:
+                description_parts.append("Devoid, neutrality, and the void can be minor themes in the art.")
+            description_parts.append("The background features a mystical landscape hinting at the presence of powerful, ongoing magic.")
+            description_parts.append("Rendered in high fantasy digital art illustration style with dynamic composition and a mix of colors. The image is simplistic.")
+            
+        case "Instant":
+            object_description = f"A caster casting a burst spell, {card_info['name'].lower()}."
+            description_parts.append(f"The spell has a {color_identity_str} color theme.")
+            description_parts.append("The background features a mystical environment reacting to the sudden burst of energy from the spell.")
+            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a mix of colors.")
+            
+        case "Sorcery":
+            object_description = f"A caster casting a powerful spell, {card_info['name'].lower()}."
+            description_parts.append(f"The spell has a {color_identity_str} color theme.")
+            description_parts.append("The background features a grand environment, with the ground and air altered by the massive spell being cast.")
+            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a mix of colors.")
+            
+        case "Planeswalker":
+            object_description = f"An imposing figure, {card_info['name'].lower()}, crackling with magical energy, eyes glowing."
+            description_parts.append(f"It has a {color_identity_str} colored magic and color theme.")
+            description_parts.append("The background features an epic, otherworldly landscape.")
+            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a mix of colors.")
+            
     
-
     
-
-    # Identify colors from mana cost
-    colors = {
-        '<W>': "white",
-        '<U>': "blue",
-        '<B>': "black",
-        '<R>': "red",
-        '<G>': "green",
-        '<C>': "colorless"
-    }
-    color_identity = []
-    for symbol, color_name in colors.items():
-        if symbol in card_info['mana_cost']:
-            color_identity.append(color_name)
-    
-
-    if color_identity:
-        color_identity_str = " and ".join(color_identity)
-        description_parts.append(f"The image has a {color_identity_str} color theme.")
 
     prompt = object_description  + (" " if description_parts else "") +  " ".join(description_parts)
 
     
     # Combine all description parts into a final prompt
     if model == "DALL-E":
-        prompt += " Rendered in high fantasy digital art style with dynamic composition and a mix of colors."
-        prompt += " Do not include any text or labels in the image."
+        pass
+        #prompt += " Do not include any text or labels in the image."
     else:
-        prompt += " Rendered in high fantasy digital art style with intricate details, dynamic composition, and a mix of dark and vibrant colors. Immersive landscape."
+        pass
 
     # Include flavor text if available
     # if card_info['flavor_text']:
@@ -373,6 +413,9 @@ if __name__ == '__main__':
                 with open(f'art/DALL-E/{name}.png', 'wb') as file:
                     file.write(image_data)
                 with open(f'art/DALL-E/{name}.txt', 'w') as file:
-                    file.write(prompt)
+                    if parsed:
+                        file.write("".join(f"{k}: {v}\n" for k, v in parsed.items()))
+                        file.write("\n")
+                    file.write(prompt.replace(".", ".\n"))
                 t2 = time.time()
                 print(f"Image saved successfully! ({t2-t1:.3f}s)")

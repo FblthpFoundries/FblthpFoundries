@@ -119,23 +119,28 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
         if symbol in card_info['mana_cost']:
             color_identity.append(color_name)
 
-    if color_identity:
-        color_identity_str = " and ".join(color_identity)
-        description_parts.append(f"The image has a {color_identity_str} color theme")
+    
 
     # Describe size based on power/toughness
     if card_info['power'] and card_info['toughness']:
         power = int(card_info['power'])
         toughness = int(card_info['toughness'])
+        avg = (power + toughness)//2
 
-        if power >= 5 or toughness >= 5:
+        if avg >= 8:
             size_description = "of immense size, towering over the landscape"
-        elif power >= 3 or toughness >= 3:
+        elif avg >= 4:
             size_description = "of considerable size, imposing and strong"
+        elif avg >= 2:
+            size_description = "of medium stature"
         else:
             size_description = "smaller in stature, but agile and fierce"
 
         description_parts.append(size_description)
+
+    if color_identity:
+        color_identity_str = " and ".join(color_identity)
+        description_parts.append(f"The image has a {color_identity_str} color theme")
 
     # Construct the main description
     if card_types:
@@ -154,7 +159,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
             card_type_str = card_type_str.replace(k, renames[k])
         card_type_str = card_type_str.strip()
 
-        description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}") + f", {card_info['name']}"
+        description = (f"A {card_type_str}" if not specific_type_str else f"A {card_type_str} {specific_type_str}, {card_info['name']}")
 
         if included_abilities:
             ability_str = ", ".join(included_abilities)
@@ -165,9 +170,11 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
     
     # Combine all description parts into a final prompt
     prompt = ". ".join(description_parts)
-    prompt += ". Rendered in high fantasy digital art style with intricate details, dynamic composition, and a mix of dark and vibrant colors. Immersive landscape."
     if model == "DALL-E":
+        prompt += ". Rendered in high fantasy digital art style with dynamic composition and a mix of colors. Immersive landscape and scenery."
         prompt += " Do not include any text or labels in the image."
+    else:
+        prompt += ". Rendered in high fantasy digital art style with intricate details, dynamic composition, and a mix of dark and vibrant colors. Immersive landscape."
 
     # Include flavor text if available
     # if card_info['flavor_text']:
@@ -232,6 +239,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Generate Magic the Gathering cards')
     parser.add_argument('--text_start', type=str, default='<tl>', help='The text to start the generation with')
+    parser.add_argument('--prompt', type=str, default=None, help='The text to start the generation with')
     parser.add_argument('--max_length', type=int, default=400, help='The maximum length of the generated text')
     parser.add_argument('--gen_art', action='store_true', help='Generate art for the card')
     parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint')
@@ -239,26 +247,34 @@ if __name__ == '__main__':
     parser.add_argument('--art_model', type=str, default='SD3', help='The art model to prompt')
     args = parser.parse_args()
     assert args.art_model in SUPPORTED_MODELS, f"Art model {args.art_model} is not supported. Supported models are {", ".join(SUPPORTED_MODELS)}"
-    if args.seed:
-        set_seed(args.seed)
-    output = gen(
-        text_start=args.text_start,
-        max_length=args.max_length,
-        model_path=args.model_path
-    )
+    if not args.prompt:
+        if args.seed:
+            set_seed(args.seed)
+        output = gen(
+            text_start=args.text_start,
+            max_length=args.max_length,
+            model_path=args.model_path
+        )
 
-    parsed = parse_card_data(output.split("<eos>")[0])[0]
+        parsed = parse_card_data(output.split("<eos>")[0])[0]
 
-    print(parsed)
+        print(parsed)
 
-    [print(f"{key}: {value}") for key, value in parsed.items()]
+        [print(f"{key}: {value}") for key, value in parsed.items()]
 
+
+        
+
+        prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types(), model=args.art_model)
+        name = parsed['name']
+        print(f"Extracted art prompt: {prompt}")
+    else:
+        prompt = args.prompt
+        name = prompt[:20]
+        print(f"Overriding card generation and using custom prompt: {prompt}")
+        
 
     
-
-    prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types(), model=args.art_model)
-
-    print(f"Prompt: {prompt}")
 
     if args.gen_art:
         if args.art_model == "SD3":
@@ -282,9 +298,9 @@ if __name__ == '__main__':
                     width=1024
                 ).images[0]
             
-            img.save(f"art/{parsed['name']}.png")
+            img.save(f"art/SD3/{name}.png")
         if args.art_model == "DALL-E":
-            print("Sending request to OpenAI API... (commonly 15 second turnaround)")
+            print("Sending request to OpenAI API... (commonly ~15 second turnaround)")
             t1 = time.time()
             client = OpenAI(
                 api_key=API_KEY
@@ -302,7 +318,7 @@ if __name__ == '__main__':
 
             # Download the image and save it
             image_data = requests.get(image_url).content
-            with open(f'art/{parsed['name']}.png', 'wb') as file:
+            with open(f'art/DALL-E/{name}.png', 'wb') as file:
                 file.write(image_data)
             t2 = time.time()
             print(f"Image saved successfully! ({t2-t1:.3f}s)")

@@ -1,3 +1,4 @@
+import os
 from gpt import gen
 import argparse
 import re
@@ -134,7 +135,7 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
                 pronoun = "He"
             
             
-            object_description = f"The foreground features a {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
+            object_description = f"The foreground features a {' '.join(subtypes).lower()}, {card_info['name'].lower()}."
             if "Legendary" in card_types:
                 object_description += " Very powerful."
             if "Artifact" in card_types:
@@ -286,11 +287,11 @@ def extract_keywords_old(card):
     if type == "Creature":
         prompt = f"Fantasy digital art of a character called {parsed['name']}. It is a {subtype}."
     elif type == "Enchantment":
-        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{"" if not subtype else f' It is a {subtype}.'}"
+        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{'' if not subtype else f' It is a {subtype}.'}"
     elif type == "Artifact":
-        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{"" if not subtype else f' It is a {subtype}.'}"
+        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{'' if not subtype else f' It is a {subtype}.'}"
     elif type == "Instant" or type == "Sorcery":
-        prompt = f"Fantasy digital art of a spell called {parsed['name']}.{"" if not subtype else f' It is a {subtype}.'}"
+        prompt = f"Fantasy digital art of a spell called {parsed['name']}.{'' if not subtype else f' It is a {subtype}.'}"
     else:
         prompt = f"Fantasy digital art of {parsed['name']}, a {type}."
 
@@ -308,7 +309,7 @@ def extract_keywords_old(card):
 
     color = ', '.join(color_words)
     if color:
-        prompt += f" The background features a landscape. There is a themed sky as well. Use the color{"s" if len(color_words) > 1 else ""} {', '.join(color_words)}."
+        prompt += f" The background features a landscape. There is a themed sky as well. Use the color{'s' if len(color_words) > 1 else ''} {', '.join(color_words)}."
     else:
         prompt += f" The background features a landscape. There is a themed sky as well. Use grey colors in the art."
     
@@ -329,7 +330,7 @@ if __name__ == '__main__':
     parser.add_argument('--art_model', type=str, default='SD3', help='The art model to prompt')
     parser.add_argument('--iterations', type=int, default=1, help='The number of iterations to run')
     args = parser.parse_args()
-    assert args.art_model in SUPPORTED_MODELS, f"Art model {args.art_model} is not supported. Supported models are {", ".join(SUPPORTED_MODELS)}"
+    assert args.art_model in SUPPORTED_MODELS, f"Art model {args.art_model} is not supported. Supported models are {', '.join(SUPPORTED_MODELS)}"
 
     for i in range(args.iterations):
         print(f"\nStarting card {i+1}/{args.iterations}")
@@ -365,6 +366,8 @@ if __name__ == '__main__':
         
 
         if args.gen_art:
+            if not os.path.exists(f"art/{args.art_model}"):
+                os.makedirs(f"art/{args.art_model}")
             if args.art_model == "SD3":
                 pipe = StableDiffusion3Pipeline.from_pretrained(
                     "stabilityai/stable-diffusion-3-medium-diffusers",

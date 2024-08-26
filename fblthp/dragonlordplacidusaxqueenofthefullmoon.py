@@ -339,11 +339,11 @@ def extract_keywords_old(card):
     if type == "Creature":
         prompt = f"Fantasy digital art of a character called {parsed['name']}. It is a {subtype}."
     elif type == "Enchantment":
-        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{"" if not subtype else f' It is a {subtype}.'}"
+        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{'' if not subtype else f' It is a {subtype}.'}"
     elif type == "Artifact":
-        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{"" if not subtype else f' It is a {subtype}.'}"
+        prompt = f"Fantasy digital art of an enchantment called {parsed['name']}.{'' if not subtype else f' It is a {subtype}.'}"
     elif type == "Instant" or type == "Sorcery":
-        prompt = f"Fantasy digital art of a spell called {parsed['name']}.{"" if not subtype else f' It is a {subtype}.'}"
+        prompt = f"Fantasy digital art of a spell called {parsed['name']}.{'' if not subtype else f' It is a {subtype}.'}"
     else:
         prompt = f"Fantasy digital art of {parsed['name']}, a {type}."
 
@@ -361,7 +361,7 @@ def extract_keywords_old(card):
 
     color = ', '.join(color_words)
     if color:
-        prompt += f" The background features a landscape. There is a themed sky as well. Use the color{"s" if len(color_words) > 1 else ""} {', '.join(color_words)}."
+        prompt += f" The background features a landscape. There is a themed sky as well. Use the color{'s' if len(color_words) > 1 else ''} {', '.join(color_words)}."
     else:
         prompt += f" The background features a landscape. There is a themed sky as well. Use grey colors in the art."
     

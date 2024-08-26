@@ -1,11 +1,14 @@
+import json
+import random
 from gpt import gen
 import argparse
 import re
-from diffusers import StableDiffusion3Pipeline
 import torch
 from transformers import set_seed
 import requests
 from openai import OpenAI
+import openai
+from openai import BadRequestError
 import time
 
 SUPPORTED_MODELS = ["SD3", "DALL-E"]
@@ -74,7 +77,7 @@ def parse_card_data(input_text):
     
     return cards
 
-def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3"):
+def extract_keywords(card_info, model="SD3"):
 
     card_types = []
     subtypes = []
@@ -134,7 +137,8 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
                 pronoun = "He"
             
             
-            object_description = f"The foreground features a {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
+            # object_description = f"The foreground features a {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
+            object_description = f"A {" ".join(subtypes).lower()}, {card_info['name'].lower()}."
             if "Legendary" in card_types:
                 object_description += " Very powerful."
             if "Artifact" in card_types:
@@ -180,17 +184,66 @@ def extract_keywords(card_info, card_types_list, creature_types_list, model="SD3
                 size_description = f"{pronoun} is smaller in stature, but agile and fierce."
 
             object_description += " " + size_description
-            description_parts.append(f"{pronoun} has a {color_identity_str} color theme.")
+            description_parts.append(f"{pronoun} has {color_identity_str} colors.")
             description_parts.append("The background features immersive scenery.")
-            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a gradient of colors.")
+            description_parts.append("Rendered in high fantasy digital art style.")
             
         case "Artifact":
-            object_description = f"An artifact, {card_info['name'].lower()}. Reminiscent of steampunk."
+            
+            
+            if "Equipment" in subtypes:
+                object_description += "" #moved into settings for more specificity
+                settings = [
+                    f"A warrior wielding/wearing an equipment item (weapon, tool, or armor) {card_info['name'].lower()}, featured in the foreground facing forward. The background features a realistic battlefield scene with many warriors and/or creatures across a broad landscape with various terrain features.",
+                    f"An equipment item (weapon, tool, or armor) {card_info['name'].lower()} in a workshop or forge with windows. There is an artificer, metalworker, or blacksmith in the workshop. There are hints of magic and various curiosities in the workshop.",
+                    f"A powerful warrior, wielding/wearing an equipment item (weapon, tool, or armor) {card_info['name'].lower()}, showcasing the power and design of the item. The item is appropriately sized for the warrior. The warrior is battling a fearsome beast. The environment is reminiscent of nature, with surrounding foliage, trees, and wildlife.",
+                    f"A person in a mystical ritual or ceremony wielding/wearing an equipment item (weapon, tool, or armor) {card_info['name'].lower()}. The item is appropriately sized for the person. Small ripples, sparkles, mists, or waves of magic surround the item. The environment is a mystical temple or sacred place, that could feature water or elements of life.",
+
+                ]
+                description_parts.append(random.choice(settings))
+            elif "Vehicle" in subtypes:
+                settings = [
+                    f"An artifact vehicle, {card_info['name'].lower()}. The vehicle is in motion, with a driver or pilot. The background features a fantastical landscape with elements of magic and fantasy.",
+                    f"An artifact vehicle, {card_info['name'].lower()}. The vehicle is stationary, with a driver or pilot. The vehicle is in a workshop.",
+                ]
+                object_description = f""
+                description_parts.append(random.choice(settings))
+                description_parts.append("Reminiscent of steampunk.")
+                description_parts.append(f"The vehicle has metallic color and theme, among others.")
+            else:
+                object_description = f"An artifact, {card_info['name'].lower()}."
+                settings = [
+                    f"The background features a mystical, ancient workshop, surrounded by the remnants of forgotten civilizations.",
+                    f"The background features the aftermath of a scorched battlefield, glowing faintly amidst the debris and fallen warriors. Smoke rises from the earth.",
+                    f"The artifact rests upon a crumbling pedestal in the heart of ancient ruins. Faint glyphs on the wall glow with a forgotten magic.",
+                    f"The artifact is held by a powerful being, surrounded by a mystical aura. The background features a grand, otherworldly landscape.",
+                    f"The artifact is on top of a table in a dimly lit, cluttered laboratory. Alchemical apparatus and scrolls surround it, casting long shadows. A hooded figure studies it intently from the shadows.",
+                    f"The artifact sits in a glassy chamber in the depths of an ancient underwater temple, untouched by time. Schools of fish dart past, and bioluminescent plants illuminate the chamber with an ethereal glow.",
+                    f"The artifact is embedded in the rocky floor of a volcanic crater, glowing intensely amidst pools of molten lava. The air is thick with ash and heat, and the sky above is a deep red, as if the artifact is feeding off the volcanic energy.",
+                    f"The artifact rests on a stone altar deep within a haunted forest with twisted twees and thick fog obscuring the surroundings. Ghostly figures and whispers fill the air.",
+                    f"In the center of a massive, coliseum-like arena, the artifact stands as the prize of a grand tournament. Thousands of spectators watch from the stands, and magical wards crackle around the artifact, protecting it from would-be thieves."
+                    f"The artifact is half-buried in the ice of a frozen tundra, surrounded by towering glaciers and icy winds. It emits a faint, warm glow that contrasts with the bleak, cold environment, as if defying the harsh elements.",
+                    f"In a lush, enchanted garden, the artifact is nestled among vibrant flowers and vines that seem to bloom unnaturally. Butterflies made of pure light flutter around it, and the air is filled with a soft, melodic hum as the artifact pulses gently.",
+                    f"The artifact sits on an anvil in a dwarven forge, where molten metal flows like rivers of fire. The walls are adorned with ancient weapons and tools, and the forge's heat intensifies as the artifact's energy interacts with the surrounding flames.",
+                    f"The artifact is partially submerged in the thick, murky waters of a twilight swamp. Strange creatures lurk in the shadows, and glowing eyes peer from the dark undergrowth, drawn to the artifact's eerie, phosphorescent glow.",
+                    f"The artifact is held aloft by a group of robed figures in a moonlit clearing, surrounded by ancient standing stones. The air shimmers with magic, and the artifact's glow seems to pulse in time with the phases of the moon.",
+                    f"The artifact is placed on a pedestal in the center of an arcane library, surrounded by towering shelves of ancient tomes and scrolls. Magic-infused orbs float around the artifact, casting a soft light, while spectral scholars peruse the endless knowledge.",
+                    f"The artifact is mounted on the wall of a grand hall, surrounded by the banners and trophies of legendary heroes. The hall is filled with the echoes of past battles, and the artifact's glow illuminates the faces of the fallen warriors depicted in the tapestries.",
+                    f"The artifact rests in a heavily guarded vault, surrounded by layers of magical wards and traps. The walls are made of enchanted stone, and the only light comes from the artifact itself, which pulses ominously, as if waiting for its power to be unleashed.",
+                    f"The artifact is held by a powerful sorcerer atop a towering spire, overlooking a sprawling city below. The sky is filled with swirling storm clouds, and bolts of lightning arc around the artifact, crackling with raw magical energy.",
+                    f"The artifact is enshrined in a sacred temple, surrounded by offerings and prayers from devoted worshippers. The air is thick with incense, and the temple's walls are adorned with intricate carvings that depict the artifact's legendary history.",
+                    f"The artifact is securely fastened to the deck of a skyship, sailing through stormy skies. The scene takes place on the deck of the skyship. Lightning crackles around the ship's hull, and the artifact seems to absorb the energy, glowing brighter with each bolt that strikes the vessel.",
+                    f"The artifact is hidden deep within a labyrinthine dungeon, guarded by traps, monsters, and ancient curses. The walls are lined with the bones of fallen adventurers, and the air is thick with the stench of decay and magic.",
+                    f"The artifact hovers at the center of a temporal rift, where time and space twist and blur. Fragments of past and future events flash around it, and the artifact glows with a strange light, holding the unstable rift together with its arcane power.",
+                    f"The artifact is enshrined in a tranquil mountain monastery, high above the clouds. Monks chant softly in the background, and the artifact is bathed in the golden light of the setting sun, radiating peace and serenity.",
+                    f"The artifact is held by a powerful dragon in its hoard, surrounded by mountains of gold and jewels. The dragon's eyes gleam with avarice, and the artifact's glow seems to intensify as the dragon's greed grows.",
+                ]
+                description_parts.append(random.choice(settings))
+                description_parts.append(f"The artifact has metallic colors, among others.")
+
             if "Legendary" in card_types:
-                object_description += " Very powerful and ornate."
-            description_parts.append(f"The artifact has a {color_identity_str} color theme.")
-            description_parts.append("The background features a mystical, ancient workshop, surrounded by the remnants of forgotten civilizations.")
-            description_parts.append("Rendered in high fantasy digital art style with dynamic composition and a mix of colors.")
+                object_description += "The item is very powerful and ornate."
+            description_parts.append("Rendered in high fantasy digital art style.")
             
             
         case "Enchantment":
@@ -317,105 +370,237 @@ def extract_keywords_old(card):
     if parsed['flavor_text']:
         prompt += " " + parsed['flavor_text']
     return prompt
+
+def extract_keywords_ai(card_text):
+    chatgpt_prompt = f"""
+    Given the following Magic: The Gathering card text, generate an image prompt for DALL-E to create an image that captures the essence of the card.:
+
+    Type Line: {card_text['type_line']}
+    Name: {card_text['name']}
+    Mana Cost: {card_text['mana_cost']}
+    Oracle Text: {card_text['oracle_text']}
+    Power: {card_text['power']}
+    Toughness: {card_text['toughness']}
+    Loyalty: {card_text['loyalty']}
+    Flavor Text: {card_text['flavor_text']}
+
+    Please provide a detailed description for an image that captures the essence of this card. Avoid text in the image. 
+    If there are named characters from MTG in the name, oracle text, or flavor text, do your best to incorporate them into the art.
+    Simply explain what to generate.
+    Avoid using the words "token" and "card" in the prompt. Avoid urban environments, unless they are somewhat fantasy in nature.
+    Return ONLY the prompt as a response. The prompt should be summarized in 150 tokens.
+    """
+    from constants import API_KEY
+    openai.api_key = API_KEY
+    # Send the request to ChatGPT
+    try:
+        response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an expert in generating descriptive art prompts."},
+            {"role": "user", "content": chatgpt_prompt}
+        ],
+        max_tokens=175
+        )
+        #print(response)
+        image_prompt = response.choices[0].message.content.strip()
+
+        return True, image_prompt
+    except:
+        return False, None
+
+def generate_text_local(model_path, seed=None, text_start="<tl>", max_length=400):
+
+    if seed:
+        set_seed(seed)
+
+    #generate card
+    output = gen(
+        text_start=text_start,
+        max_length=max_length,
+        model_path=model_path
+    )
+
+    parsed = parse_card_data(output.split("<eos>")[0])[0]
+
+    return True, parsed
+
+def generate_text_gpt(model="gpt-4o-mini"):
+    from constants import API_KEY
+    openai.api_key = API_KEY
+    chatgpt_prompt = f"""
+Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. This card should have a diverse set of characteristics, including a randomly chosen color identity, mana cost, and type with appropriate subtypes.
+
+- Choose a random color identity and design a mana cost that reflects it, with colorless cost appearing before colored cost.
+- Select a random type and subtype, making sure it fits within a themed and cohesive narrative.
+- Ensure that this card could seamlessly integrate into a well-rounded strategy, with a power level that complements the broader game.
+- Return ONLY a JSON dictionary with 'type_line', 'name', 'mana_cost', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values.
+- If a field is not applicable, set it to an empty string.
+- Format mana symbols with angle brackets, e.g., <G>.
+- Focus on thematic elements and do not explicitly mention "cards" or "tokens".
+- Generate only one entity per API call.
+"""
+    from constants import API_KEY
+    openai.api_key = API_KEY
+    # Send the request to ChatGPT
+    try:
+        response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are an expert in generating Magic: The Gathering cards."},
+            {"role": "user", "content": chatgpt_prompt}
+        ],
+        max_tokens=300
+        )
+        image_prompt = response.choices[0].message.content.strip()
+
+        return True, image_prompt
+    except:
+        return False, None
+
+def generate_image_local(prompt, model="SD3"):
+    if model == "SD3":
+        from diffusers import StableDiffusion3Pipeline
+
+        pipe = StableDiffusion3Pipeline.from_pretrained(
+                "stabilityai/stable-diffusion-3-medium-diffusers",
+                #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
+                #tokenizer_3=None,
+                torch_dtype=torch.float16
+                ) #TODO: cache model between iterations to save performance
+        
+        pipe.enable_model_cpu_offload()
+
+        #pipe = pipe.to("cuda")
+
+        img = pipe(
+                prompt=prompt,
+                num_images_per_prompt=1,
+                num_inference_steps=30,
+                height=800,
+                width=1024
+            ).images[0]
+        
+        return img
+    else:
+        raise Exception(f"Model {model} not supported")
+
+def generate_image_dalle(prompt):
+    try:
+        from constants import API_KEY
+    except:
+        raise Exception("constants.py not found. Please rename constants_example.py to constants.py and add your OpenAI API key to use DALL-E for image generation.")
+    
+    assert API_KEY != "your-api-key-here", "Please add your OpenAI API key to constants.py"
+    print("Sending request to OpenAI API... (commonly ~15 second turnaround)")
+    client = OpenAI(
+        api_key=API_KEY
+    )
+    try:
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1
+        )
+
+        image_url = response.data[0].url
+    except BadRequestError as e:
+        print(f"Image rejected by safety system. Skipping...")
+        return False, None
+    
+    # Download the image and save it
+    image_data = requests.get(image_url).content
+    return True, image_data
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Generate Magic the Gathering cards')
     parser.add_argument('--text_start', type=str, default='<tl>', help='The text to start the generation with')
-    parser.add_argument('--prompt', type=str, default=None, help='The text to start the generation with')
+    parser.add_argument('--extractor', type=str, default="local", help="The keyword extractor to use")
     parser.add_argument('--max_length', type=int, default=400, help='The maximum length of the generated text')
     parser.add_argument('--gen_art', action='store_true', help='Generate art for the card')
+    parser.add_argument('--generator', type=str, default="local", help='The text generator to use')
     parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint')
-    parser.add_argument('--seed', type=int, default=None, help='The random seed')
+    parser.add_argument('--seed', type=int, default=None, help='The random seed for gpt2 if used')
     parser.add_argument('--art_model', type=str, default='SD3', help='The art model to prompt')
     parser.add_argument('--iterations', type=int, default=1, help='The number of iterations to run')
     args = parser.parse_args()
     assert args.art_model in SUPPORTED_MODELS, f"Art model {args.art_model} is not supported. Supported models are {", ".join(SUPPORTED_MODELS)}"
 
     for i in range(args.iterations):
+
         print(f"\nStarting card {i+1}/{args.iterations}")
-        if not args.prompt:
-            success = False
-            while not success:
-                if args.seed:
-                    set_seed(args.seed)
-                output = gen(
-                    text_start=args.text_start,
-                    max_length=args.max_length,
-                    model_path=args.model_path
-                )
-
-                parsed = parse_card_data(output.split("<eos>")[0])[0]
-
-                print(parsed)
-
-                [print(f"{key}: {value}") for key, value in parsed.items()]
-
-
-                
-
-                success, prompt = extract_keywords(parsed, fetch_card_types(), fetch_creature_types(), model=args.art_model)
-            name = parsed['name']
-            print(f"\nExtracted art prompt: {prompt}")
-        else:
-            prompt = args.prompt
-            name = prompt[:20]
-            print(f"\nOverriding card generation and using custom prompt: {prompt}")
-            
-
         
+        # Start timing for card generation
+        t_start_card = time.time()
 
-        if args.gen_art:
-            if args.art_model == "SD3":
-                pipe = StableDiffusion3Pipeline.from_pretrained(
-                    "stabilityai/stable-diffusion-3-medium-diffusers",
-                    #text_encoder_3=None, #This thing absolutely annihilates my GPU, turn it off
-                    #tokenizer_3=None,
-                    torch_dtype=torch.float16
-                    )
-                pipe.enable_model_cpu_offload()
+        # Generate Card
+        parsed = None
+        if args.generator == "local":
+            success, parsed = generate_text_local(args.model_path, seed=args.seed, text_start=args.text_start, max_length=args.max_length)
+        elif args.generator == "gpt":
+            success, returned = generate_text_gpt()
+            try:
+                parsed = json.loads(returned)
+            except json.JSONDecodeError:
+                print("Failed to parse JSON response")
+                print(returned)
+        else:
+            raise Exception(f"Generator {args.generator} not supported")
+        
+        t_end_card = time.time()
+        print(f"Card generation time: {t_end_card - t_start_card:.3f}s")
 
-                #pipe = pipe.to("cuda")
+        card_dict = parsed
+        name = card_dict['name']
 
+        print(f"\nGenerated card {name}:")
+        print(json.dumps(card_dict, indent=4))
 
+        # Start timing for prompt extraction
+        t_start_prompt = time.time()
+        
+        # Generate Artwork prompt
+        if args.extractor == "local":
+            success, prompt = extract_keywords(parsed, model=args.art_model)
+        elif args.extractor == "gpt":
+            success, prompt = extract_keywords_ai(parsed)
+        else:
+            raise Exception(f"Extractor {args.extractor} not supported")
+        
+        t_end_prompt = time.time()
+        print(f"Prompt extraction time: {t_end_prompt - t_start_prompt:.3f}s")
+        
+        print(f"\nExtracted art prompt for {name}: \n\n{prompt}")
 
-                img = pipe(
-                        prompt=prompt,
-                        num_images_per_prompt=1,
-                        num_inference_steps=30,
-                        height=800,
-                        width=1024
-                    ).images[0]
-                
-                img.save(f"art/SD3/{name}.png")
-            if args.art_model == "DALL-E":
-                try:
-                    from constants import API_KEY
-                except:
-                    raise Exception("constants.py not found. Please rename constants_example.py to constants.py and add your OpenAI API key to use DALL-E for image generation.")
-                
-                assert API_KEY != "your-api-key-here", "Please add your OpenAI API key to constants.py"
-                print("Sending request to OpenAI API... (commonly ~15 second turnaround)")
-                t1 = time.time()
-                client = OpenAI(
-                    api_key=API_KEY
-                )
-                response = client.images.generate(
-                    model="dall-e-3",
-                    prompt=prompt,
-                    size="1024x1024",
-                    quality="standard",
-                    n=1
-                )
-                image_url = response.data[0].url
-                
-                # Download the image and save it
-                image_data = requests.get(image_url).content
-                with open(f'art/DALL-E/{name}.png', 'wb') as file:
-                    file.write(image_data)
-                with open(f'art/DALL-E/{name}.txt', 'w') as file:
-                    if parsed:
-                        file.write("".join(f"{k}: {v}\n" for k, v in parsed.items()))
-                        file.write("\n")
-                    file.write(prompt.replace(".", ".\n"))
-                t2 = time.time()
-                print(f"Image saved successfully! ({t2-t1:.3f}s)")
+        # End early if artwork generation is disabled
+        if not args.gen_art:
+            print("\nEnding early since gen_art was disabled.")
+            continue
+
+        # Start timing for artwork generation
+        t_start_art = time.time()
+
+        # Generate Artwork
+        print("\nBeginning artwork generation!")
+        
+        if args.art_model != "DALL-E":
+            img = generate_image_local(prompt, model=args.art_model)
+        else:
+            success, img = generate_image_dalle(prompt)
+
+        t_end_art = time.time()
+        print(f"Artwork generation time: {t_end_art - t_start_art:.3f}s")
+
+        # Save the image and prompt
+        with open(f'art/out/{name}.png', 'wb') as file:
+            file.write(img)
+        with open(f'art/out/{name}.txt', 'w') as file:
+            if card_dict:
+                card_dict["prompt"] = prompt
+                file.write(json.dumps(card_dict, indent=4))
+
+        t_final = time.time()
+        print(f"Total time for iteration {i+1}: {t_final - t_start_card:.3f}s")

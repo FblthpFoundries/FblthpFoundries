@@ -1,5 +1,6 @@
 import json
 import random
+from fortissaxlordofblood import seed_card
 from gpt import gen
 from local_extractor import extract_keywords
 import argparse
@@ -158,23 +159,37 @@ def generate_text_local(model_path, seed=None, text_start="<tl>", max_length=400
         logger.error(f"Failed to generate text locally: {e}")
         return False, None
 
+
 def generate_text_gpt(model="gpt-4o-mini"):
     from constants import API_KEY
     openai.api_key = API_KEY
+
+    # Generate card attributes using seed_card function
+    card_type, colors, mana_cost = seed_card()
+
+    # Format the color identity
+    color_identity = ", ".join(colors) if colors else "Colorless"
+
     chatgpt_prompt = f"""
-Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. This card should have a diverse set of characteristics, including a randomly chosen color identity, mana cost, and type with appropriate subtypes.
+Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. 
 
-- Choose a random color identity and design a mana cost that reflects it, with colorless cost appearing before colored cost.
-- Select a random type and subtype, making sure it fits within a themed and cohesive narrative.
-- Ensure that this card could seamlessly integrate into a well-rounded strategy, with a power level that complements the broader game.
-- Return ONLY a JSON dictionary with 'type_line', 'name', 'mana_cost', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values.
+Start with the following characteristics of the card:
+
+- Color Identity: {color_identity}
+- Mana Cost: {mana_cost}
+- Type: {card_type}
+
+- Choose a theme for the card at random, but make sure it's a good fit with the above characteristics.
+{'- Creatures should have creature subtypes fitting their theme.' if 'Creature' in card_type else ''}
+{'- Planeswalkers should have a loyalty value, as well as abilities that reflect their character.' if 'Planeswalker' in card_type else ''}
+- Cards should have flavor text.
+- Ensure that this card's abilities are balanced with its mana cost.
+- Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
 - If a field is not applicable, set it to an empty string.
-- Format mana symbols with angle brackets, e.g., <G>.
-- Focus on thematic elements and do not explicitly mention "cards" or "tokens".
+- Format mana symbols with curly braces.
 - Generate only one card per API call.
-- Do not include inline formatting, specifically the ```json before and ``` after.
-
 """
+
     try:
         response = openai.chat.completions.create(
         model="gpt-4o-mini",
@@ -185,9 +200,13 @@ Create a unique card within the world of Magic: The Gathering, ensuring it follo
         max_tokens=300
         )
         card_data = response.choices[0].message.content.strip()
+        if '```' in card_data:
+            card_data = card_data.split('```')[1]
+        if card_data[:4] == "json":
+            card_data = card_data[4:]
         return True, card_data
     except Exception as e:
-        logger.error(f"Failed to generate text using GPT: {e}")
+        print(f"Failed to generate text using GPT: {e}")
         return False, None
 
 def generate_image_local(prompt, model="SD3"):

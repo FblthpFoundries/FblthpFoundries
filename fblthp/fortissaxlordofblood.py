@@ -36,12 +36,30 @@ def seed_card():
         "Sorcery": 3154,
         "Planeswalker": 292,
     }
+
+
+    rarities = ["Common", "Uncommon", "Rare", "Mythic Rare"]
+    r_dist = [0.1, 0.2, 0.5, 0.2] #Shifted right from a more typical distribution to have more power to match a cube environment
+    rarity = random.choices(rarities, weights=r_dist, k=1)[0]
+
+    # types = {
+    #     "Artifact": 1,
+    #     "Enchantment": 1,
+    #     "Land": 1,
+    #     "Creature": 0,
+    #     "Instant": 1,
+    #     "Sorcery": 1,
+    #     "Planeswalker": 1,
+    # }
+
     options = list(types.keys())
     weights = list(types.values())
 
     # Select one type based on the weights
     selected_type = random.choices(options, weights=weights, k=1)[0]
     colors = []
+
+
 
     if selected_type == "Artifact":
         if random.random() < 0.15:
@@ -55,6 +73,7 @@ def seed_card():
     
     elif selected_type == "Land":
         colors = pick_even_cid()
+        return selected_type, colors, "", rarity
     elif selected_type == "Enchantment":
         if random.random() < 0.2:
             selected_type += " Aura"
@@ -65,11 +84,17 @@ def seed_card():
 
     
     # Adjusted distribution of converted mana cost
-    cmc_weights = [0.20, 0.267, 0.217, 0.15, 0.10, 0.067]
-    cmc_values = [1, 2, 3, 4, 5, random.randint(6, 10)]  # 6+ treated as a random value from 6 to 10
+    cmc_weights = [0.004975, 0.188756, 0.251741, 0.205174, 0.141393, 0.093930, 0.031045, 0.021891, 0.019104, 0.014627, 0.009154, 0.006368, 0.004577, 0.003682, 0.002687, 0.000896]
+
+    cmc_values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
     generic_mana = random.choices(cmc_values, weights=cmc_weights, k=1)[0]
     mana_cost = ""
+
+    if generic_mana == 0:
+        colors = []
+        mana_cost = "{0}"
+        return selected_type, colors, mana_cost, rarity
     
     
     # Weighted choice for the number of mana symbols
@@ -82,40 +107,45 @@ def seed_card():
         mana_cost += mana_symbols[color] * num_symbols
     gm = max(generic_mana - total_syms, 0)
     if gm > 0:
-        mana_cost = f"{gm}" + mana_cost
-    return selected_type, colors, mana_cost
+        mana_cost = f"{{{gm}}}" + mana_cost
+
+    
+    #print(selected_type, colors, mana_cost, rarity)
+    return selected_type, colors, mana_cost, rarity
 
 def test_seed_card(runs=1000):
-    from collections import defaultdict
     
     type_counter = defaultdict(int)
     color_counter = defaultdict(int)
     total_mana_cost = 0
     num_cards_with_colors = 0
+    color_count_distribution = defaultdict(int)
+    cmc_distribution = defaultdict(int)
 
     for _ in range(runs):
-        card_type, colors, mana_cost = seed_card()
+        card_type, colors, mana_cost, rarity = seed_card()
         
         # Count card types
         type_counter[card_type] += 1
         
-        # Count colors
+        # Count colors and their distribution
+        num_colors = len(colors)
+        color_count_distribution[num_colors] += 1
         for color in colors:
             color_counter[color] += 1
         
-        # Accumulate total mana cost
-        mana_cost_values = []
-        
-        # Extract and sum all mana symbols (both generic and colored)
+        # Calculate converted mana cost (CMC)
+        converted_mana_cost = 0
         for part in mana_cost.split("{"):
             if part:
                 value = part.split("}")[0]
                 if value.isdigit():  # This handles generic mana like {2}, {3}, etc.
-                    mana_cost_values.append(int(value))
+                    converted_mana_cost += int(value)
                 else:  # This handles colored mana like {W}, {U}, etc.
-                    mana_cost_values.append(1)
+                    converted_mana_cost += 1
         
-        total_mana_cost += sum(mana_cost_values)
+        cmc_distribution[converted_mana_cost] += 1
+        total_mana_cost += converted_mana_cost
 
         # Count how many cards had colors
         if colors:
@@ -136,6 +166,14 @@ def test_seed_card(runs=1000):
     
     print(f"\nAverage Mana Cost: {avg_mana_cost:.2f}")
     print(f"Average Number of Cards with Colors: {avg_colors_per_card:.2f}")
+
+    print("\nColor Count Distribution:")
+    for num_colors, count in sorted(color_count_distribution.items()):
+        print(f"{num_colors} colors: {count / runs * 100:.2f}%")
+
+    print("\nConverted Mana Cost (CMC) Distribution:")
+    for cmc, count in sorted(cmc_distribution.items()):
+        print(f"CMC {cmc}: {count / runs * 100:.2f}%")
 
 
 # Example usage

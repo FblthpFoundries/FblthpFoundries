@@ -1,12 +1,10 @@
 import json
 import random
 from fortissaxlordofblood import seed_card
-from gpt import gen
 from local_extractor import extract_keywords
 import argparse
 import re
 import torch
-from transformers import set_seed
 import requests
 from openai import OpenAI
 import openai
@@ -16,6 +14,11 @@ import uuid
 from enum import Enum
 from tqdm import tqdm
 import logging
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 class SupportedModels(Enum):
     SD3 = "SD3"
@@ -103,7 +106,7 @@ def parse_card_data(input_text):
     
     return cards
 
-def extract_keywords_gpt(card_text):
+def extract_keywords_gpt(card_text, model="gpt-4o-mini"):
     chatgpt_prompt = f"""
     Given the following Magic: The Gathering card text, generate an image prompt for DALL-E to create an image that captures the essence of the card.:
 
@@ -115,34 +118,27 @@ def extract_keywords_gpt(card_text):
     Toughness: {card_text['toughness']}
     Loyalty: {card_text['loyalty']}
     Flavor Text: {card_text['flavor_text']}
+    Rarity: {card_text['rarity']}
 
     Please provide a detailed description for an image that captures the essence of this card. Avoid text in the image. 
     If there are named characters from MTG in the name, oracle text, or flavor text, do your best to incorporate them into the art.
-    Simply explain what to generate.
-    Avoid using the words "token" and "card" in the prompt. Avoid urban environments, unless they are somewhat fantasy in nature.
-    Return ONLY the prompt as a response. The prompt should be summarized in 150 tokens.
+    Simply explain what to generate. Do not mention Magic: The Gathering.
+    {"Artifacts should have metallic elements." if "Artifact" in card_text['type_line'] else ""}
+    Avoid using the words "token", "permanent", "counter", and "card" in the prompt. Instead suggest specific creatures, humans, or objects in their place. Avoid urban environments, unless they are somewhat fantasy in nature.
+    Return only JSON as output with the returned prompt stored in a "prompt" field. The prompt should be summarized in 150 tokens.
     """
     from constants import API_KEY
     openai.api_key = API_KEY
     # Send the request to ChatGPT
-    try:
-        response = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an expert in generating descriptive art prompts."},
-            {"role": "user", "content": chatgpt_prompt}
-        ],
-        max_tokens=175
-        )
-        image_prompt = response.choices[0].message.content.strip()
-
-        return True, image_prompt
-    except Exception as e:
-        logger.error(f"Failed to extract keywords using GPT: {e}")
-        return False, None
+    
+    success, out = ask_gpt(chatgpt_prompt, model=model)
+    print(out)
+    image_prompt = out["prompt"]
+    return True, image_prompt
 
 def generate_text_local(model_path, seed=None, text_start="<tl>", max_length=400):
-
+    from transformers import set_seed
+    from gpt import gen
     if seed:
         set_seed(seed)
 
@@ -154,57 +150,116 @@ def generate_text_local(model_path, seed=None, text_start="<tl>", max_length=400
             model_path=model_path
         )
         parsed = parse_card_data(output.split("<eos>")[0])[0]
+        parsed['rarity'] = random.choice(["Common", "Uncommon", "Rare", "Mythic Rare"]) #TODO: fix
         return True, parsed
     except Exception as e:
         logger.error(f"Failed to generate text locally: {e}")
         return False, None
 
+#@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
+def ask_gpt(prompt, header="You are an expert in generating Magic: The Gathering cards.", model="gpt-4o-mini"):
+    response = openai.chat.completions.create(
+    model=model,
+    messages=[
+        {"role": "system", "content": header},
+        {"role": "user", "content": prompt}
+    ],
+    #max_tokens=300
+    )
+    resp = response.choices[0].message.content.strip()
+    #print(resp)
+    if '```' in resp:
+        resp = resp.split('```')[1]
+    if resp[:4] == "json":
+        resp = resp[4:]
+    return True, json.loads(resp)
 
-def generate_text_gpt(model="gpt-4o-mini"):
+
+def generate_card_gpt(model="gpt-4o-mini"):
     from constants import API_KEY
     openai.api_key = API_KEY
 
     # Generate card attributes using seed_card function
-    card_type, colors, mana_cost = seed_card()
+    card_type, colors, mana_cost, rarity = seed_card()
 
     # Format the color identity
     color_identity = ", ".join(colors) if colors else "Colorless"
-
-    chatgpt_prompt = f"""
-Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. 
-
+    theme_prompt = f'''
+    You will be creating a unique card within the world of Magic: The Gathering. 
 Start with the following characteristics of the card:
 
-- Color Identity: {color_identity}
+- Color Identity: {color_identity if color_identity else "Colorless"}
+- Card Type: {card_type}
 - Mana Cost: {mana_cost}
 - Type: {card_type}
+- Rarity: {rarity}
 
-- Choose a theme for the card at random, but make sure it's a good fit with the above characteristics.
-{'- Creatures should have creature subtypes fitting their theme.' if 'Creature' in card_type else ''}
-{'- Planeswalkers should have a loyalty value, as well as abilities that reflect their character.' if 'Planeswalker' in card_type else ''}
-- Cards should have flavor text.
-- Ensure that this card's abilities are balanced with its mana cost.
-- Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
-- If a field is not applicable, set it to an empty string.
-- Format mana symbols with curly braces.
-- Generate only one card per API call.
-"""
+- Generate 20 themes for the card based on these characteristics. These go in the 'themes' field.
+- Return a JSON dictionary with a 'themes' field, with a list of string values.
+
+'''
+    
 
     try:
-        response = openai.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "You are an expert in generating Magic: The Gathering cards."},
-            {"role": "user", "content": chatgpt_prompt}
-        ],
-        max_tokens=300
-        )
-        card_data = response.choices[0].message.content.strip()
-        if '```' in card_data:
-            card_data = card_data.split('```')[1]
-        if card_data[:4] == "json":
-            card_data = card_data[4:]
-        return True, card_data
+        success, themes = ask_gpt(theme_prompt, model=model)
+        if not success:
+            raise Exception("Failed to generate themes using GPT")
+        themes = themes['themes']
+        theme = random.choice(themes)
+
+        name_prompt = f'''
+    You will be creating a unique card within the world of Magic: The Gathering. 
+Start with the following characteristics of the card:
+
+- Color Identity: {color_identity if color_identity else "Colorless"}
+- Card Type: {card_type}
+- Mana Cost: {mana_cost}
+- Type: {card_type}
+- Rarity: {rarity}
+- Theme: {theme}
+
+- Generate 20 names for the card based on these characteristics. Ensure the name makes sense for a {card_type} card. These go in the 'names' field.
+- Return a JSON dictionary with a 'names' field, with a list of string values.
+
+'''
+        success, names = ask_gpt(name_prompt, model=model)
+        if not success:
+            raise Exception("Failed to generate names using GPT")
+        names = names['names']
+        name = random.choice(names)
+
+        chatgpt_prompt = f"""
+    Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. 
+
+    Start with the following characteristics of the card:
+    - Name: {name}
+    - Theme: {theme}
+    - Color Identity: {color_identity if color_identity else "Colorless"}
+    - Card Type: {card_type}
+    - Mana Cost: {mana_cost}
+    - Type: {card_type}
+    - Rarity: {rarity}
+    {'- Creatures should have creature subtypes fitting their theme.' if 'Creature' in card_type else ''}
+    {'- Planeswalkers should have a loyalty value in the "loyalty" field, as well as abilities that reflect their character. Planeswalkers also have a subtype with their first name in the type line. i.e. Planeswalker - <firstname>' if 'Planeswalker' in card_type else ''}
+    {'- Lands should have no mana cost, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
+    - The rarer the card, the more complex and intricate its abilities should be. Rarer cards should be more powerful too.
+    - Cards should have flavor text.
+    - Any token creatures created by the card should have power and toughness.
+    {'Come up with a new named ability for this card.' if (random.random() < 1) else ""}
+    {"- Ensure that this card's abilities are balanced with its rarity." if 'Land' in card_type else "- Ensure that this card's abilities are balanced with its mana cost and rarity."}
+    - Return a JSON dictionary with 'themes', 'theme', 'names', 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
+    - If a field is not applicable, set it to an empty string.
+    - Format mana symbols with curly braces.
+    - Generate only one card per API call.
+    """
+
+        success, card = ask_gpt(chatgpt_prompt, model=model)
+        if not success:
+            raise Exception("Failed to generate card using GPT")
+        
+        card['themes'] = themes
+        card['names'] = names
+        return True, card
     except Exception as e:
         print(f"Failed to generate text using GPT: {e}")
         return False, None
@@ -273,6 +328,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     assert args.art_model in [model.value for model in SupportedModels], f"Art model {args.art_model} is not supported. Supported models are {[model.value for model in SupportedModels]}"
 
+    gpt_model = "gpt-4o-mini" #"gpt-3.5-turbo"
+
+
     # Outer tqdm bar for tracking overall progress
     with tqdm(total=args.iterations, desc="Overall Progress", ncols=100) as overall_bar:
         # Loop over each iteration (each card generation)
@@ -289,10 +347,10 @@ if __name__ == '__main__':
                 if args.generator == "local":
                     success, parsed = generate_text_local(args.model_path, seed=args.seed, text_start=args.text_start, max_length=args.max_length)
                 elif args.generator == "gpt":
-                    success, returned = generate_text_gpt()
+                    success, returned = generate_card_gpt(model=gpt_model)
                     if success:
                         try:
-                            parsed = json.loads(returned)
+                            parsed = returned
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse JSON response: {e}")
                             logger.error(f"Response: {returned}")
@@ -309,6 +367,8 @@ if __name__ == '__main__':
                 logger.info(f"Card generation time: {t_end_card - t_start_card:.3f}s")
 
                 card_dict = parsed
+                card_dict["gpt-model"] = gpt_model
+                card_dict["image_generator"] = args.art_model
                 name = card_dict['name']
 
                 logger.info(f"\nGenerated card {name}:")
@@ -321,7 +381,7 @@ if __name__ == '__main__':
                 if args.extractor == "local":
                     success, prompt = extract_keywords(parsed, model=args.art_model)
                 elif args.extractor == "gpt":
-                    success, prompt = extract_keywords_gpt(parsed)
+                    success, prompt = extract_keywords_gpt(parsed, model=gpt_model)
                 else:
                     logger.error(f"Extractor {args.extractor} not supported")
                     continue

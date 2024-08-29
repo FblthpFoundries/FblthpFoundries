@@ -10,7 +10,7 @@ import { getRandomEmoji, generateCard, DiscordRequest } from './utils.js';
 // Create an express app
 const app = express();
 // Get port, or default to 3000
-const PORT = process.env.PORT || 3000;
+const PORT =  5000;
 
 
 /**
@@ -78,7 +78,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         data:{content: "loading"}
       })
 
-      const card =  generateCard(req.body.data.options)
+      const card =  await generateCard(req.body.data.options)
 
 
       const edit = await DiscordRequest(`webhooks/${process.env.APP_ID}/${req.body.token}`,

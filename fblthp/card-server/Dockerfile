@@ -1,8 +1,6 @@
 FROM python:latest
 
-ADD card-server.py /server/
-ADD requirements.txt /server/ 
-ADD secret_tokens.py /server/
+RUN mkdir /server/
 
 EXPOSE 5001
 

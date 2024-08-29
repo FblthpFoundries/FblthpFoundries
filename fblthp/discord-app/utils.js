@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import './addRequire.js' 
 
+export const cardServer = 'http://card-server:5001'
+
 export async function DiscordRequest(endpoint, options) {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10/' + endpoint;
@@ -51,9 +53,19 @@ export function capitalize(str) {
 }
 
 
-export function generateCard(options){
+export async function generateCard(options){
 
-  var settings = ''
+  var card = ''
+
+  await fetch(cardServer + '/make_card',{
+    method: 'GET',
+  }).then((res) =>{ card = res.text()})
+
+  console.log(card)
+
+  return card
+
+ /* var settings = ''
 
   const tl = (options)?options[0].value : null
 
@@ -69,6 +81,6 @@ export function generateCard(options){
 
   //execSync('conda deactivate')
 
-  return card
+  return card*/
 
 }

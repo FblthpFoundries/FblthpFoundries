@@ -1,9 +1,13 @@
 services:
-    server:
+    card-server:
+        image: fblthp-server
         build: card-server/
-        command:  python -m flask run -p 5001 
+        command:  python -m flask run -p 5001 -h 0.0.0.0 
         ports:
             - 5001:5001
+
+        networks:
+            - app-comm
 
         environment:
             - FLASK_APP=card-server
@@ -12,6 +16,7 @@ services:
         volumes:
             - card-storage:/root/.cache
             - pip-installs:/usr/local/lib/python3.12/site-packages
+            - ./card-server:/server/
 
         deploy:
             resources:
@@ -20,8 +25,24 @@ services:
                         -   driver: nvidia
                             count: 1
                             capabilities: [gpu]
+
+    discord-bot:
+        image: fblthp-discord-bot
+        build: discord-app/
+        command: npm run start
+        ports:
+            - 5000:5000
+
+        networks:
+            - app-comm
+
+        volumes:
+            - ./discord-app:/discord-app
     
 volumes:
     card-storage:
     pip-installs:
 
+networks:
+    app-comm:
+        driver: bridge

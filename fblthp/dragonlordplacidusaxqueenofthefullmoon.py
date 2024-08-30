@@ -240,14 +240,16 @@ Start with the following characteristics of the card:
     - Type: {card_type}
     - Rarity: {rarity}
     {'- Creatures should have creature subtypes fitting their theme.' if 'Creature' in card_type else ''}
+    {'- The card should hae no power or toughness since it is not a creature.' if 'Creature' not in card_type else ''}
     {'- Planeswalkers should have a loyalty value in the "loyalty" field, as well as abilities that reflect their character. Planeswalkers also have a subtype with their first name in the type line. i.e. Planeswalker - <firstname>' if 'Planeswalker' in card_type else ''}
-    {'- Lands should have no mana cost, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
+    {'- Lands should have no mana cost, power, or toughness, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
+    {'- Instants and sorceries should have no power, loyalty, or toughness.' if 'Instant' in card_type or 'Sorcery' in card_type else ''}
     - The rarer the card, the more complex and intricate its abilities should be. Rarer cards should be more powerful too.
     - Cards should have flavor text.
     - Any token creatures created by the card should have power and toughness.
     {'Come up with a new named ability for this card.' if (random.random() < 1) else ""}
     {"- Ensure that this card's abilities are balanced with its rarity." if 'Land' in card_type else "- Ensure that this card's abilities are balanced with its mana cost and rarity."}
-    - Return a JSON dictionary with 'themes', 'theme', 'names', 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
+    - Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
     - If a field is not applicable, set it to an empty string.
     - Format mana symbols with curly braces.
     - Generate only one card per API call.
@@ -258,6 +260,7 @@ Start with the following characteristics of the card:
             raise Exception("Failed to generate card using GPT")
         
         card['themes'] = themes
+        card['theme'] = theme
         card['names'] = names
         return True, card
     except Exception as e:

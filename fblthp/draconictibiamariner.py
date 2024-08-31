@@ -1,51 +1,99 @@
-from constants import PROXYSHOP_PATH
-
-import sys
-import os
 import json
-import re
-from typing import Union, Optional, Callable
+import os
+import sys
+os.environ["HEADLESS"] = "True"
+from constants import PROXYSHOP_PATH, TEMPLATE_PATH
+
 sys.path.append(PROXYSHOP_PATH)
-
-
-# Standard Library Imports
 from pathlib import Path
+from Proxyshop.src.layouts import NormalLayout
+from Proxyshop.src.templates import BorderlessVectorTemplate
+from Proxyshop.src.utils.adobe import PhotoshopHandler
 
-# Third Party Imports
-import click
+def adjust_json(input):
+    output = {}
+    output["object"] = "card"
+    output["name"] = input["name"]
+    output["lang"] = "en"
+    output["layout"] = "normal" #TODO: Fix planeswalkers since they will probably break here
+    output["mana_cost"] = input["mana_cost"]
+    output["type_line"] = input["type_line"]
+    output["oracle_text"] = input["oracle_text"]
+    if "power" in input:
+        output["power"] = input["power"]
+    if "toughness" in input:
+        output["toughness"] = input["toughness"]
+    if "loyalty" in input:
+        output["loyalty"] = input["loyalty"]
+    output["collector_number"] = "42"
+    output["rarity"] = input["rarity"].lower()
+    output["flavor_text"] = input["flavor_text"]
+    output["artist"] = input["image_generator"]
+    output["set"] = "war" #TODO: Change this to something cooler
 
-# Local Imports
-from Proxyshop import main
-from src import CON, TEMPLATE_DEFAULTS
-from src._loader import TemplateDetails
-from src.cards import CardDetails
-from src.enums.mtg import LayoutType, LayoutScryfall, CardTypes, CardTypesSuper
-from src.layouts import layout_map
+    return output
 
-from src.templates import BaseTemplate
-from src.templates.normal import BorderlessVectorTemplate
-from src.utils.files import load_data_file
-from src.layouts import (
-    CardLayout,
-    layout_map,
-    assign_layout,
-    join_dual_card_layouts)
-from src.layouts import NormalLayout
-from src import (
-        APP, CFG, CON, CONSOLE, ENV,
-        PLUGINS, TEMPLATES, TEMPLATE_MAP, TEMPLATE_DEFAULTS)
 
-if __name__ == "__main__":
-    main.launch_gui()
-    # card = json.loads('''{"object":"card","id":"036ef8c9-72ac-46ce-af07-83b79d736538","oracle_id":"000d5588-5a4c-434e-988d-396632ade42c","multiverse_ids":[83282],"mtgo_id":22609,"mtgo_foil_id":22610,"tcgplayer_id":12835,"cardmarket_id":12551,"name":"Storm Crow","lang":"en","released_at":"2005-07-29","uri":"https://api.scryfall.com/cards/036ef8c9-72ac-46ce-af07-83b79d736538","scryfall_uri":"https://scryfall.com/card/9ed/100/storm-crow?utm_source=api","layout":"normal","highres_image":true,"image_status":"highres_scan","image_uris":{"small":"https://cards.scryfall.io/small/front/0/3/036ef8c9-72ac-46ce-af07-83b79d736538.jpg?1562730661","normal":"https://cards.scryfall.io/normal/front/0/3/036ef8c9-72ac-46ce-af07-83b79d736538.jpg?1562730661","large":"https://cards.scryfall.io/large/front/0/3/036ef8c9-72ac-46ce-af07-83b79d736538.jpg?1562730661","png":"https://cards.scryfall.io/png/front/0/3/036ef8c9-72ac-46ce-af07-83b79d736538.png?1562730661","art_crop":"https://cards.scryfall.io/art_crop/front/0/3/036ef8c9-72ac-46ce-af07-83b79d736538.jpg?1562730661","border_crop":"https://cards.scryfall.io/border_crop/front/0/3/036ef8c9-72ac-46ce-af07-83b79d736538.jpg?1562730661"},"mana_cost":"{1}{U}","cmc":2,"type_line":"Creature — Bird","oracle_text":"Flying (This creature can't be blocked except by creatures with flying or reach.)","power":"1","toughness":"2","colors":["U"],"color_identity":["U"],"keywords":["Flying"],"legalities":{"standard":"not_legal","future":"not_legal","historic":"not_legal","timeless":"not_legal","gladiator":"not_legal","pioneer":"not_legal","explorer":"not_legal","modern":"legal","legacy":"legal","pauper":"legal","vintage":"legal","penny":"legal","commander":"legal","oathbreaker":"legal","standardbrawl":"not_legal","brawl":"not_legal","alchemy":"not_legal","paupercommander":"legal","duel":"legal","oldschool":"not_legal","premodern":"legal","predh":"legal"},"games":["paper","mtgo"],"reserved":false,"foil":false,"nonfoil":true,"finishes":["nonfoil"],"oversized":false,"promo":false,"reprint":true,"variation":false,"set_id":"e70c8572-4732-4e92-a140-b4e3c1c84c93","set":"9ed","set_name":"Ninth Edition","set_type":"core","set_uri":"https://api.scryfall.com/sets/e70c8572-4732-4e92-a140-b4e3c1c84c93","set_search_uri":"https://api.scryfall.com/cards/search?order=set&q=e%3A9ed&unique=prints","scryfall_set_uri":"https://scryfall.com/sets/9ed?utm_source=api","rulings_uri":"https://api.scryfall.com/cards/036ef8c9-72ac-46ce-af07-83b79d736538/rulings","prints_search_uri":"https://api.scryfall.com/cards/search?order=released&q=oracleid%3A000d5588-5a4c-434e-988d-396632ade42c&unique=prints","collector_number":"100","digital":false,"rarity":"common","flavor_text":"Storm crow descending, winter unending. Storm crow departing, summer is starting.","card_back_id":"0aeebaf5-8c7d-4636-9e82-8c27447861f7","artist":"John Matson","artist_ids":["a1685587-4b55-446b-b420-c37b202ed3f1"],"illustration_id":"d01aa92b-0582-4e1e-a7b0-737b2ad4e462","border_color":"white","frame":"2003","full_art":false,"textless":false,"booster":true,"story_spotlight":false,"edhrec_rank":17354,"penny_rank":12596,"prices":{"usd":"0.23","usd_foil":null,"usd_etched":null,"eur":"0.04","eur_foil":null,"tix":"0.04"},"related_uris":{"gatherer":"https://gatherer.wizards.com/Pages/Card/Details.aspx?multiverseid=83282&printed=false","tcgplayer_infinite_articles":"https://tcgplayer.pxf.io/c/4931599/1830156/21018?subId1=api&trafcat=infinite&u=https%3A%2F%2Finfinite.tcgplayer.com%2Fsearch%3FcontentMode%3Darticle%26game%3Dmagic%26partner%3Dscryfall%26q%3DStorm%2BCrow","tcgplayer_infinite_decks":"https://tcgplayer.pxf.io/c/4931599/1830156/21018?subId1=api&trafcat=infinite&u=https%3A%2F%2Finfinite.tcgplayer.com%2Fsearch%3FcontentMode%3Ddeck%26game%3Dmagic%26partner%3Dscryfall%26q%3DStorm%2BCrow","edhrec":"https://edhrec.com/route/?cc=Storm+Crow"},"purchase_uris":{"tcgplayer":"https://tcgplayer.pxf.io/c/4931599/1830156/21018?subId1=api&u=https%3A%2F%2Fwww.tcgplayer.com%2Fproduct%2F12835%3Fpage%3D1","cardmarket":"https://www.cardmarket.com/en/Magic/Products/Singles/Ninth-Edition/Storm-Crow?referrer=scryfall&utm_campaign=card_prices&utm_medium=text&utm_source=scryfall","cardhoarder":"https://www.cardhoarder.com/cards/22609?affiliate_id=scryfall&ref=card-profile&utm_campaign=affiliate&utm_medium=card&utm_source=scryfall"}}''')
-    # filedetails: CardDetails = {
-    #      'file': "C:\\Users\\Sam\\Documents\\FblthpFoundries\\fblthp\\art\\DALL-E\\Sudden Death.png", 'name': card.get('name', ''),
-    #     'set': '', 'artist': '', 'creator': '', 'number': ''
-    # }
-    # layout = layout_map.get(card.get('layout', 'normal'))
-    # layout(card, filedetails)
-    # layout.template_file = "C:\\Users\\Sam\\Documents\\FblthpFoundries\\fblthp\\Proxyshop\\templates\\borderless-vector.psd"
-    # layout.art_file = "C:\\Users\\Sam\\Documents\\FblthpFoundries\\fblthp\\art\\DALL-E\\Sudden Death.png"
-    # bvt = BorderlessVectorTemplate(layout=layout)
-    # bvt.execute()
+def render_card(path_to_card, path_to_art):
+    # # Initialize the Photoshop application handler
+    # photoshop_app = PhotoshopHandler()
+
+    # Define the path to your template PSD file
+    template_path = Path(TEMPLATE_PATH)  # Adjust the path as needed
+
+    # Define the Scryfall data for your card
+    scryfall_data = adjust_json(path_to_card)
+
+    # Load the path to your card's image file
+    art_file_path = Path(path_to_art)  # Adjust the path as needed
+
+
+
+    # Instantiate the layout object
+    card_layout = NormalLayout(
+        scryfall=scryfall_data,
+        file={
+            'file': art_file_path,
+            'name': scryfall_data['name'],
+            'artist': scryfall_data['artist'],
+            'set': scryfall_data['set'],
+            'creator': None
+        }
+    )
+    card_layout.template_file = template_path
+    # Instantiate the template directly
+    template_object = BorderlessVectorTemplate(card_layout)
+
+    # Start the rendering process
+
+    # Assuming the template object has an execute method
+    current_render = template_object  # Directly use the instantiated template object
+    result = current_render.execute()
+
+    if result:
+        print(f"Rendering completed successfully!")
+    else:
+        print(f"Rendering failed: Unknown error")
+
+def render_folder(folder_path):
+    folder = Path(folder_path)
     
+    # Find all .json and .txt files
+    json_files = list(folder.glob("*.json")) + list(folder.glob("*.txt"))
+
+    for json_file in json_files:
+        art_file = json_file.with_suffix('.png')
+        if art_file.exists():
+            with open(json_file, 'r') as f:
+                json_data = json.load(f)
+            render_card(json_data, art_file)
+        else:
+            print(f"Art file not found for {json_file.stem}. Skipping...")
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Render all cards in a folder.")
+    parser.add_argument("folder", help="Path to the folder containing card .json and .png files")
+    args = parser.parse_args()
+    print(args.folder)
+    render_folder(args.folder)

@@ -1,3 +1,6 @@
 [submodule "fblthp/mana"]
 	path = fblthp/mana
 	url = https://github.com/andrewgioia/mana.git
+[submodule "Proxyshop"]
+	path = fblthp/Proxyshop
+	url = https://github.com/sfarrell0/Proxyshop.git

@@ -23,6 +23,7 @@ from tenacity import (
 class SupportedModels(Enum):
     SD3 = "SD3"
     DALL_E = "DALL-E"
+    DALL_E_WIDE = "DALL-E-WIDE"
 
 class TqdmLoggingHandler(logging.Handler):
     def __init__(self, level=logging.NOTSET):
@@ -132,7 +133,6 @@ def extract_keywords_gpt(card_text, model="gpt-4o-mini"):
     # Send the request to ChatGPT
     
     success, out = ask_gpt(chatgpt_prompt, model=model)
-    print(out)
     image_prompt = out["prompt"]
     return True, image_prompt
 
@@ -167,7 +167,6 @@ def ask_gpt(prompt, header="You are an expert in generating Magic: The Gathering
     #max_tokens=300
     )
     resp = response.choices[0].message.content.strip()
-    #print(resp)
     if '```' in resp:
         resp = resp.split('```')[1]
     if resp[:4] == "json":
@@ -240,14 +239,15 @@ Start with the following characteristics of the card:
     - Type: {card_type}
     - Rarity: {rarity}
     {'- Creatures should have creature subtypes fitting their theme.' if 'Creature' in card_type else ''}
-    {'- The card should hae no power or toughness since it is not a creature.' if 'Creature' not in card_type else ''}
+    {'- The card should hae no power or toughness since it is not a creature.' if ('Creature' not in card_type and 'Vehicle' not in card_type) else ''}
     {'- Planeswalkers should have a loyalty value in the "loyalty" field, as well as abilities that reflect their character. Planeswalkers also have a subtype with their first name in the type line. i.e. Planeswalker - <firstname>' if 'Planeswalker' in card_type else ''}
     {'- Lands should have no mana cost, power, or toughness, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
     {'- Instants and sorceries should have no power, loyalty, or toughness.' if 'Instant' in card_type or 'Sorcery' in card_type else ''}
-    - The rarer the card, the more complex and intricate its abilities should be. Rarer cards should be more powerful too.
+    - The rarer the card, the more complex its abilities should be. Cards with a higher rarity should have stronger abilities, but please keep all cards balanced and similar in power to those found in the actual game.
+    - Place separate abilities on new lines.
     - Cards should have flavor text.
     - Any token creatures created by the card should have power and toughness.
-    {'Come up with a new named ability for this card.' if (random.random() < 1) else ""}
+    {"Use a new named keyword ability in this card's oracle text." if (random.random() < 0.3) else ""}
     {"- Ensure that this card's abilities are balanced with its rarity." if 'Land' in card_type else "- Ensure that this card's abilities are balanced with its mana cost and rarity."}
     - Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
     - If a field is not applicable, set it to an empty string.
@@ -258,9 +258,8 @@ Start with the following characteristics of the card:
         success, card = ask_gpt(chatgpt_prompt, model=model)
         if not success:
             raise Exception("Failed to generate card using GPT")
-        
-        card['themes'] = themes
         card['theme'] = theme
+        card['themes'] = themes
         card['names'] = names
         return True, card
     except Exception as e:
@@ -292,7 +291,7 @@ def generate_image_local(prompt, model="SD3"):
     else:
         raise Exception(f"Model {model} not supported")
 
-def generate_image_dalle(prompt):
+def generate_image_dalle(prompt, model="DALL-E"):
     from constants import API_KEY
     openai.api_key = API_KEY
 
@@ -301,7 +300,7 @@ def generate_image_dalle(prompt):
         response = client.images.generate(
             model="dall-e-3",
             prompt=prompt,
-            size="1024x1024",
+            size=("1024x1024" if model=="DALL-E" else "1792x1024"),
             quality="standard",
             n=1
         )
@@ -397,23 +396,35 @@ if __name__ == '__main__':
                 logger.info(f"\nExtracted art prompt for {name}: \n\n{prompt}")
 
                 # Step 3: Generate Artwork (if enabled)
+                # Save the card data as JSON regardless of the --gen_art flag
+                file_id = uuid.uuid4()
+                json_path = f'art/out/{name}_{file_id}.json'
+                try:
+                    with open(json_path, 'w') as file:
+                        card_dict["prompt"] = prompt
+                        file.write(json.dumps(card_dict, indent=4))
+                    logger.info(f"Saved card data to {json_path}")
+                except Exception as e:
+                    logger.error(f"Failed to save JSON data: {e}")
+
                 if not args.gen_art:
                     logger.info("\nEnding early since gen_art was disabled.")
                     overall_bar.update(1)
                     continue
 
+
                 t_start_art = time.time()
                 card_bar.set_description(f"Generating Card {i+1}: Generating Artwork")
                 
                 img = None
-                if args.art_model != SupportedModels.DALL_E.value:
+                if args.art_model not in [SupportedModels.DALL_E.value, SupportedModels.DALL_E_WIDE.value]:
                     try:
                         img = generate_image_local(prompt, model=args.art_model)
                     except Exception as e:
                         logger.error(f"Failed to generate image locally: {e}")
                         continue
                 else:
-                    success, img = generate_image_dalle(prompt)
+                    success, img = generate_image_dalle(prompt, model=args.art_model)
                     if not success:
                         continue
 
@@ -426,16 +437,10 @@ if __name__ == '__main__':
                 card_bar.set_description(f"Generating Card {i+1}: Saving Files")
                 file_id = uuid.uuid4()
                 image_path = f'art/out/{name}_{file_id}.png'
-                prompt_path = f'art/out/{name}_{file_id}.txt'
                 try:
                     with open(image_path, 'wb') as file:
                         file.write(img)
-                    with open(prompt_path, 'w') as file:
-                        if card_dict:
-                            card_dict["prompt"] = prompt
-                            file.write(json.dumps(card_dict, indent=4))
                     logger.info(f"Saved image to {image_path}")
-                    logger.info(f"Saved prompt to {prompt_path}")
                 except Exception as e:
                     logger.error(f"Failed to save image or prompt: {e}")
 

@@ -1,4 +1,5 @@
 import json
+import os
 import random
 from fortissaxlordofblood import seed_card
 from local_extractor import extract_keywords
@@ -14,11 +15,8 @@ import uuid
 from enum import Enum
 from tqdm import tqdm
 import logging
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_random_exponential,
-)
+from constants import PROXYSHOP_PATH
+
 
 class SupportedModels(Enum):
     SD3 = "SD3"
@@ -318,31 +316,34 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Generate Magic the Gathering cards and corresponding artwork.')
     parser.add_argument('--text_start', type=str, default='<tl>', help='The text to start the card generation with. Default is "<tl>".')
-    parser.add_argument('--extractor', type=str, default="local", choices=["local", "gpt"], help='The keyword extractor to use. Choose between "local" or "gpt".')
+    parser.add_argument('--extractor', type=str, default="gpt", choices=["local", "gpt"], help='The keyword extractor to use. Choose between "local" or "gpt".')
     parser.add_argument('--max_length', type=int, default=400, help='The maximum length of the generated text. Default is 400.')
     parser.add_argument('--gen_art', action='store_true', help='If set, generate art for the card.')
-    parser.add_argument('--generator', type=str, default="local", choices=["local", "gpt"], help='The text generator to use. Choose between "local" or "gpt". Default is "local".')
+    parser.add_argument('--generator', type=str, default="gpt", choices=["local", "gpt"], help='The text generator to use. Choose between "local" or "gpt". Default is "gpt".')
     parser.add_argument('--model_path', type=str, default='./magic_mike/checkpoint-8500', help='The path to the model checkpoint. Default is "./magic_mike/checkpoint-8500".')
     parser.add_argument('--seed', type=int, default=None, help='The random seed for GPT-2 if used.')
-    parser.add_argument('--art_model', type=str, default=SupportedModels.SD3.value, choices=[model.value for model in SupportedModels], help='The art model to prompt. Supported models are "SD3" and "DALL-E". Default is "SD3".')
+    parser.add_argument('--art_model', type=str, default=SupportedModels.DALL_E.value, choices=[model.value for model in SupportedModels], help='The art model to prompt. Supported models are "SD3" and "DALL-E"/"DALL-E-WIDE". Default is "DALL-E".')
     parser.add_argument('--iterations', type=int, default=1, help='The number of iterations to run. Default is 1.')
+    parser.add_argument('--insta_render', action='store_true', help='If set, render the card immediately.')
 
     args = parser.parse_args()
     assert args.art_model in [model.value for model in SupportedModels], f"Art model {args.art_model} is not supported. Supported models are {[model.value for model in SupportedModels]}"
 
     gpt_model = "gpt-4o-mini" #"gpt-3.5-turbo"
-
+    original_wd = os.getcwd()
 
     # Outer tqdm bar for tracking overall progress
     with tqdm(total=args.iterations, desc="Overall Progress", ncols=100) as overall_bar:
         # Loop over each iteration (each card generation)
+        total = 4
+        if args.insta_render:
+            total += 1
         for i in range(args.iterations):
-            with tqdm(total=4, desc=f"Generating Card {i+1}", ncols=100, leave=False) as card_bar:
+            with tqdm(total=total, desc=f"Generating Card {i+1}", ncols=100, leave=False) as card_bar:
                 logger.info(f"\nStarting card {i+1}/{args.iterations}")
                 
                 # Start timing for card generation
                 t_start_card = time.time()
-
                 # Step 1: Generate Card
                 parsed = None
                 card_bar.set_description(f"Generating Card {i+1}: Text Generation")
@@ -399,6 +400,7 @@ if __name__ == '__main__':
                 # Save the card data as JSON regardless of the --gen_art flag
                 file_id = uuid.uuid4()
                 json_path = f'art/out/{name}_{file_id}.json'
+                json_path = os.path.join(original_wd, json_path)
                 try:
                     with open(json_path, 'w') as file:
                         card_dict["prompt"] = prompt
@@ -435,8 +437,8 @@ if __name__ == '__main__':
 
                 # Step 4: Save the image and prompt using UUIDs
                 card_bar.set_description(f"Generating Card {i+1}: Saving Files")
-                file_id = uuid.uuid4()
                 image_path = f'art/out/{name}_{file_id}.png'
+                image_path = os.path.join(original_wd, image_path)
                 try:
                     with open(image_path, 'wb') as file:
                         file.write(img)
@@ -448,6 +450,21 @@ if __name__ == '__main__':
 
                 t_final = time.time()
                 logger.info(f"Total time for iteration {i+1}: {t_final - t_start_card:.3f}s")
+
+                
+
+
+                if args.insta_render:  #TODO: Do this on a separate thread, and fix the path issues upon importing draconictibiamariner
+                    from draconictibiamariner import render_card
+                    card_bar.set_description(f"Generating Card {i+1}: Rendering Card")
+                    render_card(card_dict, image_path)
+                    target = os.path.join(PROXYSHOP_PATH, "out")
+                    for filename in os.listdir(target):
+                        if filename.startswith(card_dict["name"]):
+                            os.rename(os.path.join(target, filename), os.path.join(original_wd,"art","out", f"{name}_{file_id}_FULL.png"))
+                            break
+                    card_bar.update(1)
+
 
                 # Update the overall progress bar
                 overall_bar.update(1)

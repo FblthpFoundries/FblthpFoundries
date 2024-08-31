@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+import re
 os.environ["HEADLESS"] = "True"
 from constants import PROXYSHOP_PATH, TEMPLATE_PATH
 
@@ -16,9 +17,9 @@ def adjust_json(input):
     output["name"] = input["name"]
     output["lang"] = "en"
     output["layout"] = "normal" #TODO: Fix planeswalkers since they will probably break here
-    output["mana_cost"] = input["mana_cost"]
+    output["mana_cost"] = input["mana_cost"].replace("<", "{").replace(">", "}")
     output["type_line"] = input["type_line"]
-    output["oracle_text"] = input["oracle_text"]
+    output["oracle_text"] = re.sub(r'\n+', '\n',input["oracle_text"].replace("<", "{").replace(">", "}").replace("\\n", "\n")).replace("*", "").replace("T:", "{T}:").replace("T,","{T},")
     if "power" in input:
         output["power"] = input["power"]
     if "toughness" in input:
@@ -26,9 +27,15 @@ def adjust_json(input):
     if "loyalty" in input:
         output["loyalty"] = input["loyalty"]
     output["collector_number"] = "42"
-    output["rarity"] = input["rarity"].lower()
+    if "rarity" in input:
+        output["rarity"] = input["rarity"].lower()
+    else:
+        output["rarity"] = "rare"
     output["flavor_text"] = input["flavor_text"]
-    output["artist"] = input["image_generator"]
+    if "image_generator" in input:
+        output["artist"] = input["image_generator"]
+    else:
+        output["artist"] = "DALL-E"
     output["set"] = "war" #TODO: Change this to something cooler
 
     return output
@@ -71,7 +78,7 @@ def render_card(path_to_card, path_to_art):
     result = current_render.execute()
 
     if result:
-        print(f"Rendering completed successfully!")
+        pass # print(f"Rendering completed successfully!")
     else:
         print(f"Rendering failed: Unknown error")
 
@@ -97,3 +104,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args.folder)
     render_folder(args.folder)
+    # fd = "C:\\Users\\Sam\\Documents\\FblthpFoundries\\fblthp\\art\\out\\run"
+    # for i in range(1, 14):
+    #     render_folder(fd + str(i))
+    

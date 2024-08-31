@@ -1,6 +1,6 @@
 # Fblthp Foundries
 
-Magic: The Gathering project for generating custom cards. We support a complete generative pipeline including card text generation, art synthesis, and Photoshop image rendering.
+Magic: The Gathering project for generating new cards with the use of various AI models. We support a complete generative pipeline including card text generation, art synthesis, and Photoshop image rendering.
 
 Much of the pipeline involves 'hot-swappable' components based on the preferences of the user. For example:
 

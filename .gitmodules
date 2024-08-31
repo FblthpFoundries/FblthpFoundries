@@ -4,3 +4,6 @@
 [submodule "Proxyshop"]
 	path = fblthp/Proxyshop
 	url = https://github.com/sfarrell0/Proxyshop.git
+[submodule "fblthp/Proxyshop"]
+	path = fblthp/Proxyshop
+	url = https://github.com/sfarrell0/Proxyshop.git

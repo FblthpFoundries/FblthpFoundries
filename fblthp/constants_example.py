@@ -3,3 +3,5 @@
 API_KEY = "your-api-key-here"
 
 PROXYSHOP_PATH = "none"
+
+TEMPLATE_PATH = "none"

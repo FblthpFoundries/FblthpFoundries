@@ -236,29 +236,54 @@ Start with the following characteristics of the card:
     - Mana Cost: {mana_cost}
     - Type: {card_type}
     - Rarity: {rarity}
-    {'- Creatures should have creature subtypes fitting their theme.' if 'Creature' in card_type else ''}
-    {'- The card should hae no power or toughness since it is not a creature.' if ('Creature' not in card_type and 'Vehicle' not in card_type) else ''}
+    {'- The card should have creature subtypes fitting its theme.' if 'Creature' in card_type else ''}
+    {'- The card should have empty fields for power and toughness.' if ('Creature' not in card_type and 'Vehicle' not in card_type) else ''}
     {'- Planeswalkers should have a loyalty value in the "loyalty" field, as well as abilities that reflect their character. Planeswalkers also have a subtype with their first name in the type line. i.e. Planeswalker - <firstname>' if 'Planeswalker' in card_type else ''}
-    {'- Lands should have no mana cost, power, or toughness, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
-    {'- Instants and sorceries should have no power, loyalty, or toughness.' if 'Instant' in card_type or 'Sorcery' in card_type else ''}
+    {'- Lands should have no mana cost, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
     - The rarer the card, the more complex its abilities should be. Cards with a higher rarity should have stronger abilities, but please keep all cards balanced and similar in power to those found in the actual game.
     - Place separate abilities on new lines.
     - Cards should have flavor text.
     - Any token creatures created by the card should have power and toughness.
-    {"Use a new named keyword ability in this card's oracle text." if (random.random() < 0.3) else ""}
-    {"- Ensure that this card's abilities are balanced with its rarity." if 'Land' in card_type else "- Ensure that this card's abilities are balanced with its mana cost and rarity."}
+    {"Give the card a new keyword ability." if (random.random() < 0.3) else ""}
+    
     - Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
     - If a field is not applicable, set it to an empty string.
     - Format mana symbols with curly braces.
     - Generate only one card per API call.
     """
+    #{"- Ensure that this card's abilities are balanced with its rarity." if 'Land' in card_type else "- Ensure that this card's abilities are balanced with its mana cost and rarity."}
 
-        success, card = ask_gpt(chatgpt_prompt, model=model)
+        success, initial_card = ask_gpt(chatgpt_prompt, model=model)
         if not success:
             raise Exception("Failed to generate card using GPT")
+        
+        strength_dict = {
+            "common": "somewhat weak and have only one or two abilities",
+            "uncommon": "reasonably balanced with good synergy",
+            "rare": "strong, with a few synergistic abilities",
+            "mythic rare": "a very strong, high-impact card with multiple syngergistic abilities"
+        }
+        balancing_prompt = f"""{initial_card}
+    This is JSON for a generated Magic: the gathering card. I would like you to read the card, and adjust its abilities and stats to make it {strength_dict[initial_card["rarity"].lower()]}.
+    - Return a JSON dictionary with the adjusted 'oracle_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
+    - Also include a field 'adjustment' in the dictionary for an explanation of the changes you made and why. This JSON output is all I want.
+"""
+
+        success, new_card = ask_gpt(balancing_prompt, model=model)
+        if not success:
+            raise Exception("Failed to balance card using GPT")
+        card = initial_card.copy()
+        card['initial_card'] = initial_card
+        card['oracle_text'] = new_card['oracle_text']
+        card['power'] = new_card['power']
+        card['toughness'] = new_card['toughness']
+        card['adjustment'] = new_card['adjustment']
         card['theme'] = theme
         card['themes'] = themes
         card['names'] = names
+        card['initial-card'] = initial_card
+        card['chatgpt-prompt'] = chatgpt_prompt
+
         return True, card
     except Exception as e:
         print(f"Failed to generate text using GPT: {e}")
@@ -454,14 +479,20 @@ if __name__ == '__main__':
                 
 
 
-                if args.insta_render:  #TODO: Do this on a separate thread, and fix the path issues upon importing draconictibiamariner
+                if args.insta_render:  #TODO: Do this on a separate thread
                     from draconictibiamariner import render_card
                     card_bar.set_description(f"Generating Card {i+1}: Rendering Card")
                     render_card(card_dict, image_path)
                     target = os.path.join(PROXYSHOP_PATH, "out")
                     for filename in os.listdir(target):
                         if filename.startswith(card_dict["name"]):
-                            os.rename(os.path.join(target, filename), os.path.join(original_wd,"art","out", f"{name}_{file_id}_FULL.png"))
+                            os.rename(os.path.join(target, filename), os.path.join(original_wd,"art","out", f"{name}_{file_id}_FINAL.png"))
+                            break
+                    render_card(card_dict["initial-card"], image_path)
+                    target = os.path.join(PROXYSHOP_PATH, "out")
+                    for filename in os.listdir(target):
+                        if filename.startswith(card_dict["name"]):
+                            os.rename(os.path.join(target, filename), os.path.join(original_wd,"art","out", f"{name}_{file_id}_INITIAL.png"))
                             break
                     card_bar.update(1)
 

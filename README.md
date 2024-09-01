@@ -66,8 +66,8 @@ To get started with Fblthp Foundries, follow these steps:
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/yourusername/fblthp-foundries.git
-   cd fblthp-foundries
+   git clone https://github.com/Jacksowe000/fblthp-foundries.git
+   cd fblthp-foundries/fblthp
    ```
 
 2. **Install Dependencies:**
@@ -75,23 +75,38 @@ To get started with Fblthp Foundries, follow these steps:
    pip install -r requirements.txt
    ```
 
-3. **Set Up Environment Variables:**
-   - Create a `.env` file in the root directory with your API keys and other necessary configurations.
+3. **Set Up Constants:**
+   - Rename the `constants_example.py` to `constants.py` and fill with the necessary fields (Proxyshop path, OpenAI API key if desired).
 
-4. **Run the Pipeline:**
-   ```bash
-   python main.py
-   ```
 
 ## Usage
 
-To generate a card, run the following command:
+To generate a single card as JSON, run the following command:
 
 ```bash
-python generate_card.py --name "Elder Dragon"
+   python dragonlordplacidusaxqueenofthefullmoon.py --iterations 1
 ```
 
-Replace `"Elder Dragon"` with the name of the card you want to generate.
+You can also specify pipeline components. Ex:
+
+```bash
+   python dragonlordplacidusaxqueenofthefullmoon.py --generator gpt --extractor gpt
+```
+
+This will use gpt-4o-mini for generation and prompt extraction.
+
+Art generation can be enabled with the `--gen_art` flag, and the art model can be chosen with the `--art_model` argument. Ex:
+
+```bash
+   python dragonlordplacidusaxqueenofthefullmoon.py --generator gpt --extractor gpt --gen_art --art_model DALL-E
+```
+
+
+Art generation can be enabled with the `--gen_art` flag, and rendering can be enabled with the `--insta_render` flag. For a full start-to finish pipeline that runs a batch of 5 cards, here is an example command:
+
+```bash
+   python dragonlordplacidusaxqueenofthefullmoon.py --generator gpt --extractor gpt --gen_art --art_model DALL-E --insta_render --iterations 5
+```
 
 ## Contributing
 
@@ -115,7 +130,6 @@ Our ongoing efforts aim to enhance the balance of the generated cards and boost 
 ## Technologies
 
 - **PyTorch**
-- **Fine-tuned GPT-2 model**
 - **Stable Diffusion 3**
 - **OpenAI API**
 - **Proxyshop** (Photoshop extension for card rendering)

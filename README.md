@@ -102,21 +102,6 @@ To run a full start-to-finish pipeline that generates and renders a batch of 5 c
 python dragonlordplacidusaxqueenofthefullmoon.py --generator gpt --extractor gpt --gen_art --art_model DALL-E --insta_render --iterations 5
 ```
 
-## Contributing
-
-We welcome contributions to Fblthp Foundries! If you'd like to contribute, please follow these steps:
-
-1. **Fork the Repository.**
-2. **Create a New Branch:**
-   ```bash
-   git checkout -b feature-branch-name
-   ```
-3. **Make Your Changes and Commit:**
-   ```bash
-   git commit -m "Description of your changes"
-   ```
-4. **Push to Your Fork and Submit a Pull Request.**
-
 ## Future Goals
 
 We aim to enhance the balance of the generated cards and boost the overall creativity of the AI models.

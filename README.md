@@ -62,7 +62,7 @@ To get started with Fblthp Foundries, follow these steps:
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/Jacksowe000/fblthp-foundries.git
+   git clone https://github.com/Jacksowe000/FblthpFoundries.git
    cd fblthp-foundries/fblthp
    ```
 

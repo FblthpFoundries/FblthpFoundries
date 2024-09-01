@@ -1,56 +1,58 @@
 # Fblthp Foundries
 
-Magic: The Gathering project for generating new cards with the use of various AI models. We support a complete generative pipeline including card text generation, art synthesis, and Photoshop image rendering.
+**Fblthp Foundries** is an innovative Magic: The Gathering project dedicated to generating new and unique cards using a combination of AI models. Our pipeline covers every step of the process, from text generation to final card rendering, offering customizable options based on user preferences.
 
-Much of the pipeline involves 'hot-swappable' components based on the preferences of the user. For example:
+## Generative Pipeline Overview
 
-## Text generation:
+### Text Generation
 
-We support two pathways for text generation. 
+We offer two pathways for generating card text:
 
-**gpt-4o-mini**: We use multiple requests to the OpenAI API to produce card themes and names, fine-tune the text output, and then we parse it and feed it on to the next step. 
+- **GPT-4o-mini:** This method leverages OpenAI's API to generate card themes, names, and fine-tuned text outputs. The structured text is parsed and prepared for the next stage in the pipeline.
+  - *Estimated cost per card: < $0.001*
 
-*Estimated cost per card < $0.001*
+- **Fine-tuned GPT-2 Model:** Trained on a comprehensive corpus of existing MTG cards, this model employs custom tokenization and XML-like preprocessing to accurately generate card text. The output is then parsed and forwarded to the next stage.
+  - *Cost per card: $0* (Assuming local execution)
 
+### Image Prompt Generation
 
-**Fine-tuned GPT-2 model**: This model was trained on a corpus of existing MTG cards, which were preprocessed into an XML-like structure to encourage the model to better learn the card structure. We also created a custom tokenization process. The model is used to generate card text which is then parsed and fed on to the next step. 
+Image prompts are generated using two pathways:
 
-*$0/card, assuming locally ran*
+- **GPT-4o-mini:** Using the generated card text, we ask GPT-4o-mini to create a detailed art prompt suitable for generating card art.
+  - *Estimated cost per card: < $0.001*
 
-## Image prompt generation:
+- **Local Script:** This method extracts relevant details from the card and assembles them into a prompt for art generation.
+  - *Cost per card: $0* 
 
-We support two pathways for image prompt generation:
+### Image Generation
 
-**gpt-4o-mini**: We use the card text as input to the chatbot and ask it to give us an art prompt that can be used to generate card art. 
+We support two methods for generating card art:
 
-*Estimated cost per card < $0.001*
+- **DALL-E:** High-quality images are generated via the OpenAI API using the previously created art prompt.
+  - *Cost per card: $0.04 for 1024x1024, $0.08 for 1792x1024*
 
+- **Stable Diffusion 3:** Using open-source weights, this method generates images locally, ideal for those with access to a capable GPU.
+  - *Cost per card: $0* (Local GPU required)
 
-**local**: We use a script to extract relevant parts of the card and combine them into a prompt that can be used to generate card art.
+### Card Rendering
 
-*$0/card*
+The final step in the pipeline involves rendering the card:
 
-## Image generation:
+- **Proxyshop:** We use Photoshop plugins and templates from Proxyshop to create the final card image. This method requires a valid Photoshop installation but is otherwise free.
+  - *Cost: Free* (with Photoshop)
 
-We support two pathways for image generation.
+## Additional Features
 
-**DALL-E**: An image is requested from DALL-E via the OpenAI API with the previously generated prompt. 
+We're also developing a Discord bot and web server to further streamline the card generation process and provide additional functionalities.
 
-*Cost per card: $0.04 for 1024x1024, $0.08 for 1792x1024*
+## Future Goals
 
+Our ongoing efforts aim to enhance the balance of the generated cards and boost the overall creativity of the AI models.
 
-**Stable Diffusion 3**: An image is generated locally using the Stable Diffusion 3 open-source weights. 
+## Technologies
 
-*$0/card* (local GPU is ideal)
-
-## Card rendering:
-
-**Proxyshop** photoshop plugins and templates are used to render the card's final image. (Free, but requires a valid Photoshop account & install)
-
-A discord bot and web server are also currently in development. 
-
-Future goals include improving the balance of the cards and increasing the creativity of the generator.
-
-Technologies: PyTorch, fine-tuned GPT-2 model, Stable Diffusion 3, OpenAI API, Proxyshop (a photoshop extension for generating card images)
-
-
+- PyTorch
+- Fine-tuned GPT-2 model
+- Stable Diffusion 3
+- OpenAI API
+- Proxyshop (Photoshop extension for card rendering)

@@ -1,22 +1,22 @@
 import json
 import os
 import random
-from fortissaxlordofblood import seed_card
-from local_extractor import extract_keywords
-import argparse
+import threading
+import queue
+import uuid
+import openai
+import requests
 import re
 import torch
-import requests
-from openai import OpenAI
-import openai
-from openai import BadRequestError
+import argparse
 import time
-import uuid
+import logging
 from enum import Enum
 from tqdm import tqdm
-import logging
 from constants import PROXYSHOP_PATH
-
+from openai import OpenAI, BadRequestError
+from fortissaxlordofblood import seed_card
+from local_extractor import extract_keywords
 
 class SupportedModels(Enum):
     SD3 = "SD3"
@@ -37,6 +37,9 @@ class TqdmLoggingHandler(logging.Handler):
 
 logging.basicConfig(level=logging.WARNING, handlers=[TqdmLoggingHandler()])
 logger = logging.getLogger(__name__)
+
+# Queue for passing generated cards to the rendering thread
+render_queue = queue.Queue()
 
 def fetch_card_types():
     try:
@@ -154,7 +157,6 @@ def generate_text_local(model_path, seed=None, text_start="<tl>", max_length=400
         logger.error(f"Failed to generate text locally: {e}")
         return False, None
 
-#@retry(wait=wait_random_exponential(min=1, max=60), stop=stop_after_attempt(6))
 def ask_gpt(prompt, header="You are an expert in generating Magic: The Gathering cards.", model="gpt-4o-mini"):
     response = openai.chat.completions.create(
     model=model,
@@ -162,7 +164,6 @@ def ask_gpt(prompt, header="You are an expert in generating Magic: The Gathering
         {"role": "system", "content": header},
         {"role": "user", "content": prompt}
     ],
-    #max_tokens=300
     )
     resp = response.choices[0].message.content.strip()
     if '```' in resp:
@@ -171,16 +172,21 @@ def ask_gpt(prompt, header="You are an expert in generating Magic: The Gathering
         resp = resp[4:]
     return True, json.loads(resp)
 
-
 def generate_card_gpt(model="gpt-4o-mini"):
     from constants import API_KEY
     openai.api_key = API_KEY
 
-    # Generate card attributes using seed_card function
     card_type, colors, mana_cost, rarity = seed_card()
 
-    # Format the color identity
     color_identity = ", ".join(colors) if colors else "Colorless"
+    subbie = None
+    if "Artifact" in card_type:
+        if "Vehicle" not in card_type:
+            subbie = f"""{('- The card is a mana rock.' if random.random() < 0.4 
+            else ("- The card has an ability with {T} as part of the cost." if random.random() < 0.5 
+            else "")) if 'Artifact' in card_type else ''}"""
+        else:
+            subbie = "The card is a vehicle"
     theme_prompt = f'''
     You will be creating a unique card within the world of Magic: The Gathering. 
 Start with the following characteristics of the card:
@@ -189,13 +195,12 @@ Start with the following characteristics of the card:
 - Card Type: {card_type}
 - Mana Cost: {mana_cost}
 - Type: {card_type}
+{subbie if subbie else ""}
 - Rarity: {rarity}
 
 - Generate 20 themes for the card based on these characteristics. These go in the 'themes' field.
 - Return a JSON dictionary with a 'themes' field, with a list of string values.
-
 '''
-    
 
     try:
         success, themes = ask_gpt(theme_prompt, model=model)
@@ -212,12 +217,12 @@ Start with the following characteristics of the card:
 - Card Type: {card_type}
 - Mana Cost: {mana_cost}
 - Type: {card_type}
+{subbie if subbie else ""}
 - Rarity: {rarity}
 - Theme: {theme}
 
 - Generate 20 names for the card based on these characteristics. Ensure the name makes sense for a {card_type} card. These go in the 'names' field.
 - Return a JSON dictionary with a 'names' field, with a list of string values.
-
 '''
         success, names = ask_gpt(name_prompt, model=model)
         if not success:
@@ -225,6 +230,12 @@ Start with the following characteristics of the card:
         names = names['names']
         name = random.choice(names)
 
+        strength_dict = {
+            "common": "somewhat weak and have only one ability",
+            "uncommon": "reasonably balanced with good synergy",
+            "rare": "strong, with synergistic abilities",
+            "mythic rare": "a strong, high-impact card with multiple syngergistic abilities"
+        }
         chatgpt_prompt = f"""
     Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. 
 
@@ -236,47 +247,38 @@ Start with the following characteristics of the card:
     - Mana Cost: {mana_cost}
     - Type: {card_type}
     - Rarity: {rarity}
+    
+    When designing the card, follow these rules:
+    
     {'- The card should have creature subtypes fitting its theme.' if 'Creature' in card_type else ''}
     {'- The card should have empty fields for power and toughness.' if ('Creature' not in card_type and 'Vehicle' not in card_type) else ''}
     {'- Planeswalkers should have a loyalty value in the "loyalty" field, as well as abilities that reflect their character. Planeswalkers also have a subtype with their first name in the type line. i.e. Planeswalker - <firstname>' if 'Planeswalker' in card_type else ''}
     {'- Lands should have no mana cost, and have at least one ability that produces mana.' if 'Land' in card_type else ''}
-    - The rarer the card, the more complex its abilities should be. Cards with a higher rarity should have stronger abilities, but please keep all cards balanced and similar in power to those found in the actual game.
+    {subbie if subbie else ""}
+    {"- The card must have a crew ability with a cost." if "Vehicle" in card_type else ""}
+    - Make it {strength_dict[rarity.lower()]}
     - Place separate abilities on new lines.
     - Cards should have flavor text.
-    - Any token creatures created by the card should have power and toughness.
     {"Give the card a new keyword ability." if (random.random() < 0.3) else ""}
-    
     - Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
     - If a field is not applicable, set it to an empty string.
     - Format mana symbols with curly braces.
     - Generate only one card per API call.
     """
-    #{"- Ensure that this card's abilities are balanced with its rarity." if 'Land' in card_type else "- Ensure that this card's abilities are balanced with its mana cost and rarity."}
-
         success, initial_card = ask_gpt(chatgpt_prompt, model=model)
         if not success:
             raise Exception("Failed to generate card using GPT")
         
-        strength_dict = {
-            "common": "somewhat weak and have only one or two abilities",
-            "uncommon": "reasonably balanced with good synergy",
-            "rare": "strong, with a few synergistic abilities",
-            "mythic rare": "a very strong, high-impact card with multiple syngergistic abilities"
-        }
-        balancing_prompt = f"""{initial_card}
-    This is JSON for a generated Magic: the gathering card. I would like you to read the card, and adjust its abilities and stats to make it {strength_dict[initial_card["rarity"].lower()]}.
-    - Return a JSON dictionary with the adjusted 'oracle_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
+        balancing_prompt = f"""{initial_card}\n
+    This is JSON for a generated Magic: the gathering card. I would like you to read the card, and adjust its abilities to follow the rules of the game.
+    - Return a JSON dictionary with the adjusted 'oracle_text' field, with a string value.
     - Also include a field 'adjustment' in the dictionary for an explanation of the changes you made and why. This JSON output is all I want.
 """
-
         success, new_card = ask_gpt(balancing_prompt, model=model)
         if not success:
             raise Exception("Failed to balance card using GPT")
         card = initial_card.copy()
-        card['initial_card'] = initial_card
         card['oracle_text'] = new_card['oracle_text']
-        card['power'] = new_card['power']
-        card['toughness'] = new_card['toughness']
         card['adjustment'] = new_card['adjustment']
         card['theme'] = theme
         card['themes'] = themes
@@ -314,7 +316,7 @@ def generate_image_local(prompt, model="SD3"):
     else:
         raise Exception(f"Model {model} not supported")
 
-def generate_image_dalle(prompt, model="DALL-E"):
+def generate_image_dalle(prompt, model="DALL-E", quality="standard"):
     from constants import API_KEY
     openai.api_key = API_KEY
 
@@ -324,7 +326,7 @@ def generate_image_dalle(prompt, model="DALL-E"):
             model="dall-e-3",
             prompt=prompt,
             size=("1024x1024" if model=="DALL-E" else "1792x1024"),
-            quality="standard",
+            quality=quality,
             n=1
         )
         image_url = response.data[0].url
@@ -337,8 +339,168 @@ def generate_image_dalle(prompt, model="DALL-E"):
         logger.error(f"Failed to generate image using DALL-E: {e}")
         return False, None
 
-if __name__ == '__main__':
+def generate_card_process(i, args, overall_bar, total, gpt_model, runfolder, quality):
+    with tqdm(total=total, desc=f"Generating Card {i+1}", ncols=100, leave=False) as card_bar:
+        logger.info(f"\nStarting card {i+1}/{args.iterations}")
+        
+        # Start timing for card generation
+        t_start_card = time.time()
+        # Step 1: Generate Card
+        parsed = None
+        card_bar.set_description(f"Generating Card {i+1}: Text Generation")
+        if args.generator == "local":
+            success, parsed = generate_text_local(args.model_path, seed=args.seed, text_start=args.text_start, max_length=args.max_length)
+        elif args.generator == "gpt":
+            success, returned = generate_card_gpt(model=gpt_model)
+            if success:
+                try:
+                    parsed = returned
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON response: {e}")
+                    logger.error(f"Response: {returned}")
+                    return
+            else:
+                return
+        else:
+            logger.error(f"Generator {args.generator} not supported")
+            return
+        
+        card_bar.update(1)
+
+        t_end_card = time.time()
+        logger.info(f"Card generation time: {t_end_card - t_start_card:.3f}s")
+
+        card_dict = parsed
+        card_dict["gpt-model"] = gpt_model
+        card_dict["image_generator"] = args.art_model
+        name = card_dict['name']
+
+        logger.info(f"\nGenerated card {name}:")
+        logger.info(json.dumps(card_dict, indent=4))
+
+        # Step 2: Extract Artwork Prompt
+        t_start_prompt = time.time()
+        card_bar.set_description(f"Generating Card {i+1}: Extracting Prompt")
+        
+        if args.extractor == "local":
+            success, prompt = extract_keywords(parsed, model=args.art_model)
+        elif args.extractor == "gpt":
+            success, prompt = extract_keywords_gpt(parsed, model=gpt_model)
+        else:
+            logger.error(f"Extractor {args.extractor} not supported")
+            return
+        
+        card_bar.update(1)
+
+        t_end_prompt = time.time()
+        logger.info(f"Prompt extraction time: {t_end_prompt - t_start_prompt:.3f}s")
+        
+        logger.info(f"\nExtracted art prompt for {name}: \n\n{prompt}")
+
+        # Step 3: Generate Artwork (if enabled)
+        # Save the card data as JSON regardless of the --gen_art flag
+        file_id = uuid.uuid4()
+        card_dict["uuid"] = str(file_id)
+        json_path = f'{name}_{file_id}.json'
+        json_path = os.path.join(runfolder, json_path)
+        try:
+            with open(json_path, 'w') as file:
+                card_dict["prompt"] = prompt
+                file.write(json.dumps(card_dict, indent=4))
+            logger.info(f"Saved card data to {json_path}")
+        except Exception as e:
+            logger.error(f"Failed to save JSON data: {e}")
+
+        if not args.gen_art:
+            logger.info("\nEnding early since gen_art was disabled.")
+            overall_bar.update(1)
+            return
+
+        t_start_art = time.time()
+        card_bar.set_description(f"Generating Card {i+1}: Generating Artwork")
+        
+        img = None
+        if args.art_model not in [SupportedModels.DALL_E.value, SupportedModels.DALL_E_WIDE.value]:
+            try:
+                img = generate_image_local(prompt, model=args.art_model)
+            except Exception as e:
+                logger.error(f"Failed to generate image locally: {e}")
+                return
+        else:
+            success, img = generate_image_dalle(prompt, model=args.art_model, quality=quality)
+            if not success:
+                return
+
+        card_bar.update(1)
+
+        t_end_art = time.time()
+        logger.info(f"Artwork generation time: {t_end_art - t_start_art:.3f}s")
+
+        # Step 4: Save the image and prompt using UUIDs
+        card_bar.set_description(f"Generating Card {i+1}: Saving Files")
+        image_path = f'{name}_{file_id}.png'
+        image_path = os.path.join(runfolder, image_path)
+        try:
+            with open(image_path, 'wb') as file:
+                file.write(img)
+            logger.info(f"Saved image to {image_path}")
+        except Exception as e:
+            logger.error(f"Failed to save image or prompt: {e}")
+
+        # Add the card to the render queue
+        render_queue.put((card_dict, image_path))
+
+        card_bar.update(1)
+        t_final = time.time()
+        logger.info(f"Total time for iteration {i+1}: {t_final - t_start_card:.3f}s")
+        
+        # Update the overall progress bar
+        overall_bar.update(1)
+
+def render_process(runfolder):
+    while True:
+        card_dict, image_path = render_queue.get()
+        # print(card_dict)
+        if card_dict is None:  # Exit signal
+            render_queue.task_done()
+            break
+        
+        logger.info(f"Rendering card: {card_dict['name']}")
+        from draconictibiamariner import render_card
+        
+        render_card(card_dict, image_path)
+        
+        target = os.path.join(PROXYSHOP_PATH, "out")
+        for filename in os.listdir(target):
+            if filename.startswith(card_dict["name"]):
+                new_path = os.path.join(runfolder, f"{card_dict['name']}_{card_dict['uuid']}_FINAL.png")
+                os.rename(os.path.join(target, filename), new_path)
+                logger.info(f"Rendered card saved to {new_path}")
+                break
+        render_queue.task_done()
+        
+def get_next_run_number(directory):
+    # Regular expression to match "runN" where N is an integer
+    pattern = re.compile(r'^run(\d+)$')
     
+    # Initialize a variable to keep track of the largest N found
+    max_n = 0
+    
+    # Loop through the items in the directory
+    for item in os.listdir(directory):
+        # Check if the item is a directory and matches the pattern
+        match = pattern.match(item)
+        if match and os.path.isdir(os.path.join(directory, item)):
+            # Extract the number N and convert it to an integer
+            n = int(match.group(1))
+            # Update max_n if this N is larger than the previous ones
+            if n > max_n:
+                max_n = n
+    
+    # Return N+1 where N is the largest found
+    return max_n + 1        
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate Magic the Gathering cards and corresponding artwork.')
     parser.add_argument('--text_start', type=str, default='<tl>', help='The text to start the card generation with. Default is "<tl>".')
     parser.add_argument('--extractor', type=str, default="gpt", choices=["local", "gpt"], help='The keyword extractor to use. Choose between "local" or "gpt".')
@@ -350,154 +512,38 @@ if __name__ == '__main__':
     parser.add_argument('--art_model', type=str, default=SupportedModels.DALL_E.value, choices=[model.value for model in SupportedModels], help='The art model to prompt. Supported models are "SD3" and "DALL-E"/"DALL-E-WIDE". Default is "DALL-E".')
     parser.add_argument('--iterations', type=int, default=1, help='The number of iterations to run. Default is 1.')
     parser.add_argument('--insta_render', action='store_true', help='If set, render the card immediately.')
-
+    parser.add_argument('--quality', type=str, default="standard", choices=["standard", "hd"], help='The quality of the DALL-E image. Default is "standard".')
+    
     args = parser.parse_args()
     assert args.art_model in [model.value for model in SupportedModels], f"Art model {args.art_model} is not supported. Supported models are {[model.value for model in SupportedModels]}"
 
-    gpt_model = "gpt-4o-mini" #"gpt-3.5-turbo"
+    gpt_model = "gpt-4o-mini"
     original_wd = os.getcwd()
+
+    outfolder = os.path.join(original_wd, "out")
+    runfolder = f"run{get_next_run_number(outfolder)}"
+    runfolder = os.path.join(outfolder, runfolder)
+    resource_folder = os.path.join(runfolder, "resources")
+    os.mkdir(runfolder)
+    os.mkdir(resource_folder)
+
+
+    # Start the rendering thread
+    render_thread = threading.Thread(target=render_process, daemon=True, args=tuple([runfolder]))
+    render_thread.start()
 
     # Outer tqdm bar for tracking overall progress
     with tqdm(total=args.iterations, desc="Overall Progress", ncols=100) as overall_bar:
-        # Loop over each iteration (each card generation)
-        total = 4
-        if args.insta_render:
-            total += 1
         for i in range(args.iterations):
-            with tqdm(total=total, desc=f"Generating Card {i+1}", ncols=100, leave=False) as card_bar:
-                logger.info(f"\nStarting card {i+1}/{args.iterations}")
-                
-                # Start timing for card generation
-                t_start_card = time.time()
-                # Step 1: Generate Card
-                parsed = None
-                card_bar.set_description(f"Generating Card {i+1}: Text Generation")
-                if args.generator == "local":
-                    success, parsed = generate_text_local(args.model_path, seed=args.seed, text_start=args.text_start, max_length=args.max_length)
-                elif args.generator == "gpt":
-                    success, returned = generate_card_gpt(model=gpt_model)
-                    if success:
-                        try:
-                            parsed = returned
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Failed to parse JSON response: {e}")
-                            logger.error(f"Response: {returned}")
-                            continue
-                    else:
-                        continue
-                else:
-                    logger.error(f"Generator {args.generator} not supported")
-                    continue
-                
-                card_bar.update(1)
+            total = 4  # Adjust based on your steps
+            if args.insta_render:
+                total += 1
 
-                t_end_card = time.time()
-                logger.info(f"Card generation time: {t_end_card - t_start_card:.3f}s")
+            # Create a thread for the card generation process
+            generate_card_process(i, args, overall_bar, total, gpt_model, resource_folder, args.quality)
 
-                card_dict = parsed
-                card_dict["gpt-model"] = gpt_model
-                card_dict["image_generator"] = args.art_model
-                name = card_dict['name']
+    # Signal the rendering thread to exit
+    render_queue.put((None, None))
+    render_queue.join()
 
-                logger.info(f"\nGenerated card {name}:")
-                logger.info(json.dumps(card_dict, indent=4))
-
-                # Step 2: Extract Artwork Prompt
-                t_start_prompt = time.time()
-                card_bar.set_description(f"Generating Card {i+1}: Extracting Prompt")
-                
-                if args.extractor == "local":
-                    success, prompt = extract_keywords(parsed, model=args.art_model)
-                elif args.extractor == "gpt":
-                    success, prompt = extract_keywords_gpt(parsed, model=gpt_model)
-                else:
-                    logger.error(f"Extractor {args.extractor} not supported")
-                    continue
-                
-                card_bar.update(1)
-
-                t_end_prompt = time.time()
-                logger.info(f"Prompt extraction time: {t_end_prompt - t_start_prompt:.3f}s")
-                
-                logger.info(f"\nExtracted art prompt for {name}: \n\n{prompt}")
-
-                # Step 3: Generate Artwork (if enabled)
-                # Save the card data as JSON regardless of the --gen_art flag
-                file_id = uuid.uuid4()
-                json_path = f'art/out/{name}_{file_id}.json'
-                json_path = os.path.join(original_wd, json_path)
-                try:
-                    with open(json_path, 'w') as file:
-                        card_dict["prompt"] = prompt
-                        file.write(json.dumps(card_dict, indent=4))
-                    logger.info(f"Saved card data to {json_path}")
-                except Exception as e:
-                    logger.error(f"Failed to save JSON data: {e}")
-
-                if not args.gen_art:
-                    logger.info("\nEnding early since gen_art was disabled.")
-                    overall_bar.update(1)
-                    continue
-
-
-                t_start_art = time.time()
-                card_bar.set_description(f"Generating Card {i+1}: Generating Artwork")
-                
-                img = None
-                if args.art_model not in [SupportedModels.DALL_E.value, SupportedModels.DALL_E_WIDE.value]:
-                    try:
-                        img = generate_image_local(prompt, model=args.art_model)
-                    except Exception as e:
-                        logger.error(f"Failed to generate image locally: {e}")
-                        continue
-                else:
-                    success, img = generate_image_dalle(prompt, model=args.art_model)
-                    if not success:
-                        continue
-
-                card_bar.update(1)
-
-                t_end_art = time.time()
-                logger.info(f"Artwork generation time: {t_end_art - t_start_art:.3f}s")
-
-                # Step 4: Save the image and prompt using UUIDs
-                card_bar.set_description(f"Generating Card {i+1}: Saving Files")
-                image_path = f'art/out/{name}_{file_id}.png'
-                image_path = os.path.join(original_wd, image_path)
-                try:
-                    with open(image_path, 'wb') as file:
-                        file.write(img)
-                    logger.info(f"Saved image to {image_path}")
-                except Exception as e:
-                    logger.error(f"Failed to save image or prompt: {e}")
-
-                card_bar.update(1)
-
-                t_final = time.time()
-                logger.info(f"Total time for iteration {i+1}: {t_final - t_start_card:.3f}s")
-
-                
-
-
-                if args.insta_render:  #TODO: Do this on a separate thread
-                    from draconictibiamariner import render_card
-                    card_bar.set_description(f"Generating Card {i+1}: Rendering Card")
-                    render_card(card_dict, image_path)
-                    target = os.path.join(PROXYSHOP_PATH, "out")
-                    for filename in os.listdir(target):
-                        if filename.startswith(card_dict["name"]):
-                            os.rename(os.path.join(target, filename), os.path.join(original_wd,"art","out", f"{name}_{file_id}_FINAL.png"))
-                            break
-                    render_card(card_dict["initial-card"], image_path)
-                    target = os.path.join(PROXYSHOP_PATH, "out")
-                    for filename in os.listdir(target):
-                        if filename.startswith(card_dict["name"]):
-                            os.rename(os.path.join(target, filename), os.path.join(original_wd,"art","out", f"{name}_{file_id}_INITIAL.png"))
-                            break
-                    card_bar.update(1)
-
-
-                # Update the overall progress bar
-                overall_bar.update(1)
-
-        logger.info("All iterations completed.")
+    logger.info("All iterations and renderings completed.")

@@ -3,5 +3,5 @@ fblthp/magic_mike/*
 cards.csv
 corpus.csv
 *.pyc
-fblthp/art/*
+fblthp/out/*
 fblthp/constants.py

@@ -36,21 +36,25 @@ def seed_card():
         "Sorcery": 3154,
         "Planeswalker": 292,
     }
+    types["Creature"] /= 3 #Adjusted to encourage other card types
+    types["Planeswalker"] *= 4
+    types["Artifact"] *= 100
+
 
 
     rarities = ["Common", "Uncommon", "Rare", "Mythic Rare"]
     r_dist = [0.1, 0.2, 0.5, 0.2] #Shifted right from a more typical distribution to have more power to match a cube environment
     rarity = random.choices(rarities, weights=r_dist, k=1)[0]
 
-    # types = {
-    #     "Artifact": 1,
-    #     "Enchantment": 1,
-    #     "Land": 1,
-    #     "Creature": 0,
-    #     "Instant": 1,
-    #     "Sorcery": 1,
-    #     "Planeswalker": 1,
-    # }
+    types = {
+        "Artifact": 1,
+        "Enchantment": 1,
+        "Land": 1,
+        "Creature": 1,
+        "Instant": 1,
+        "Sorcery": 1,
+        "Planeswalker": 1,
+    }
 
     options = list(types.keys())
     weights = list(types.values())
@@ -63,9 +67,9 @@ def seed_card():
 
     if selected_type == "Artifact":
         if random.random() < 0.15:
-            selected_type += " Equipment"
+            selected_type += "\u2014 Equipment"
         elif random.random() < 0.1:
-            selected_type += " Vehicle"
+            selected_type += "\u2014 Vehicle"
         if random.random() < 0.7:
             colors = []
         else:
@@ -76,7 +80,7 @@ def seed_card():
         return selected_type, colors, "", rarity
     elif selected_type == "Enchantment":
         if random.random() < 0.2:
-            selected_type += " Aura"
+            selected_type += "\u2014 Aura"
         colors = pick_even_cid()
                 
     else:

@@ -15,8 +15,8 @@ from enum import Enum
 from tqdm import tqdm
 from constants import PROXYSHOP_PATH
 from openai import OpenAI, BadRequestError
-from fortissaxlordofblood import seed_card
-from local_extractor import extract_keywords
+from helpers.distribution import seed_card
+from helpers.local_prompt_extractor import extract_keywords
 
 class SupportedModels(Enum):
     SD3 = "SD3"
@@ -466,7 +466,7 @@ def render_process(runfolder):
             break
         
         logger.info(f"Rendering card: {card_dict['name']}")
-        from draconictibiamariner import render_card
+        from helpers.render import render_card
         
         render_card(card_dict, image_path)
         

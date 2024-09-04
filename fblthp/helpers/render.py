@@ -7,9 +7,9 @@ from constants import PROXYSHOP_PATH, TEMPLATE_PATH
 
 sys.path.append(PROXYSHOP_PATH)
 from pathlib import Path
-from Proxyshop.src.layouts import NormalLayout
-from Proxyshop.src.templates import BorderlessVectorTemplate
-from Proxyshop.src.utils.adobe import PhotoshopHandler
+from src.layouts import NormalLayout
+from src.templates import BorderlessVectorTemplate
+from src.utils.adobe import PhotoshopHandler
 
 def adjust_json(input):
     output = {}
@@ -41,7 +41,7 @@ def adjust_json(input):
     return output
 
 
-def render_card(path_to_card, path_to_art):
+def render_card(card, path_to_art):
     # # Initialize the Photoshop application handler
     # photoshop_app = PhotoshopHandler()
 
@@ -49,7 +49,9 @@ def render_card(path_to_card, path_to_art):
     template_path = Path(TEMPLATE_PATH)  # Adjust the path as needed
 
     # Define the Scryfall data for your card
-    scryfall_data = adjust_json(path_to_card)
+    scryfall_data = adjust_json(card)
+
+    print(scryfall_data)
 
     # Load the path to your card's image file
     art_file_path = Path(path_to_art)  # Adjust the path as needed
@@ -78,7 +80,7 @@ def render_card(path_to_card, path_to_art):
     result = current_render.execute()
 
     if result:
-        pass # print(f"Rendering completed successfully!")
+         print(f"Rendering completed successfully!")
     else:
         print(f"Rendering failed: Unknown error")
 
@@ -99,11 +101,16 @@ def render_folder(folder_path):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Render all cards in a folder.")
-    parser.add_argument("folder", help="Path to the folder containing card .json and .png files")
-    args = parser.parse_args()
-    print(args.folder)
-    render_folder(args.folder)
+    #parser = argparse.ArgumentParser(description="Render all cards in a folder.")
+    #parser.add_argument("folder", help="Path to the folder containing card .json and .png files", required=False)
+    #args = parser.parse_args()
+    #print(args.folder)
+
+    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<4> <R>","name":"Goblin Looter","oracle_text":"Goblin Looter enters with two oil counters on it. \n <T>: Goblin Looter gains flying until end of turn.","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
+
+    render_card(card, 'C:\\Users\\oweng\\magic\\fblthp\\stormCrow.jpg') 
+    
+    #render_folder(args.folder)
     # fd = "C:\\Users\\Sam\\Documents\\FblthpFoundries\\fblthp\\art\\out\\run"
     # for i in range(1, 14):
     #     render_folder(fd + str(i))

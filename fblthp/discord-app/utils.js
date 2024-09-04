@@ -65,22 +65,5 @@ export async function generateCard(options){
 
   return card
 
- /* var settings = ''
-
-  const tl = (options)?options[0].value : null
-
-  if (tl){
-    settings += ` -tl \"${tl}\"`
-  }
-
-  const execSync = require('child_process').execSync
-
-  //execSync('conda activate magic')
-
-  const card = execSync(`python cardGenerator.py ${settings}`).toString('utf8')
-
-  //execSync('conda deactivate')
-
-  return card*/
 
 }

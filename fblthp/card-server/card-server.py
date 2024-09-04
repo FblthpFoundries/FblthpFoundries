@@ -2,7 +2,7 @@ from flask import Flask
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import re
 import secret_tokens
-#import draconictibiamariner
+import htmlRender
 
 
 def parse_card_data(input_text):
@@ -85,7 +85,7 @@ def create_app():
     @app.route('/test', methods = ['GET'])
     def test():
         card = makeCard()
-        return parse_card_data(card) 
+        return renderCard(parse_card_data(card), 'picture.jpg') 
     
     return app
 

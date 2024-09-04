@@ -38,7 +38,7 @@ We support two methods for generating card art:
 
 The final step in the pipeline involves rendering the card:
 
-- **Proxyshop:** Utilizes Photoshop plugins and templates from Proxyshop to create the final card image. This method requires a valid Photoshop installation but is otherwise free.
+- **Proxyshop:** Utilizes Photoshop plugins and templates from Proxyshop to create the final card image. This rendering is controlled by a separate thread so the main card generation can continue. This method requires a valid Photoshop installation but is otherwise free.
   - *Cost: Free* (with Photoshop)
 
 ## Examples

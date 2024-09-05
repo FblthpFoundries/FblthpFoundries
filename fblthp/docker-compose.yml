@@ -17,10 +17,6 @@ services:
             - card-storage:/root/.cache
             - pip-installs:/usr/local/lib/python3.12/site-packages
             - ./card-server:/server/
-            - ./Proxyshop:/server/Proxyshop
-            - ./constants.py:/server/constants.py
-            - ./stormCrow.jpg:/server/picture.jpg
-            - ./draconictibiamariner.py:/server/draconictibiamariner.py
 
         deploy:
             resources:

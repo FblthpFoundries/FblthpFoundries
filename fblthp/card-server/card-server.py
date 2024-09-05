@@ -85,7 +85,7 @@ def create_app():
     @app.route('/test', methods = ['GET'])
     def test():
         card = makeCard()
-        return renderCard(parse_card_data(card), 'picture.jpg') 
+        return htmlRender.renderCard(parse_card_data(card)[0], 'picture.jpg') 
     
     return app
 

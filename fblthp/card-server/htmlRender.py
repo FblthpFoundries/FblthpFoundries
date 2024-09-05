@@ -1,6 +1,8 @@
 import imgkit
 import re
 
+to_absolute = 'C:/Users/oweng/magic/fblthp/card-'
+
 body = """
     <html>
         <head>
@@ -30,7 +32,7 @@ body = """
                     width 750px;
                 }
                 .card{
-                    background-image: url('file:///server/card_templates/Black_Template.png');
+                    background-image: url('file:///CARDBACKGROUND');
                     background-repeat: no-repeat;
                     background-attachment: fixed;
                     background-size: auto;
@@ -47,6 +49,7 @@ body = """
                     width:500px;
                     height:50;
                     text-align:justify;
+                    text-shadow: 5px 5px;
                 }
                 .mana{
                     font-family:"mana-font";
@@ -65,6 +68,7 @@ body = """
                     top:580px;
                     left:80px;
                     font-size:25px;
+                    text-shadow: 5px 5px;
                 }
                 .body_text{
                     position:absolute;
@@ -94,11 +98,6 @@ body = """
                     width:570px;
                     height:465px;
                 }
-                img{
-                    width:570px;
-                    height:465px;
-                    object-fit:fill;
-                }
                 .pt{
                     position:absolute;
                     width:120px;
@@ -108,6 +107,12 @@ body = """
                     color:white;
                     font-size:50px;
                     font-family:"body-font";
+                    text-shadow: 5px 5px;
+                }
+                .set_symbol{
+                    position:absolute;
+                    top:580px;
+                    left:610px;
                 }
                 
             </style>
@@ -121,12 +126,13 @@ body = """
                     MC
                 </div>
                 <div class="image">
-                    <img src="file:///server/picture.jpg" />
+                    <img src="file:///server/picture.jpg" style="width:570px;height:465px;object-fit:fill;" />
                 </div>
                 <div class="type_line">
                     TL
                 </div>
                 <div class="set_symbol">
+                    <img src="file:///server/Logo.jpg" style="width:40px;height:40px;object-fit:fill"/>
                 </div>
                 <div class="body_text">
                     <div class="oracle_text">
@@ -145,6 +151,7 @@ body = """
     """
 
 def renderCard(card, art):
+    print('RECEIVED')
     options = {
         'format': 'png',
         'enable-local-file-access': ''
@@ -154,6 +161,8 @@ def renderCard(card, art):
     
 
     imgkit.from_string(html, 'out.png', options=options)
+
+    print("DONE")
 
     return html
 
@@ -165,6 +174,15 @@ mana_colors={
     'G':'#26b569',
 }
 
+color_backgrounds={
+    'W':'White_Template.png',
+    'B':'Black_Template.png',
+    'U':'Blue_Template.png',
+    'R':'Red_Template.png',
+    'G':'Green_Template.png',
+    'MC':'MultiColored_Template.png',
+    'C':'Colorless_Template.png',
+}
 
 def updateManaCost(string):
     single_digit = r'<[0-9]>'
@@ -180,7 +198,7 @@ def updateManaCost(string):
     to_replace = re.findall(single_mana, string)
 
     for mana in to_replace:
-        string = string.replace(mana,  f'<span style=\"color:{mana_colors[mana[1]]} \">Q</span>{mana[1].lower()}')
+        string = string.replace(mana,  f'<span style=\"color:{mana_colors[mana[1]]}\">Q</span>{mana[1].lower()}')
 
 
     single_special = r'<[TX]>'
@@ -194,16 +212,33 @@ def updateManaCost(string):
 
     return string
 
+def setBackground(card, body):
+    color_regex = r'[WUBRG]'
+
+    colors = re.findall(color_regex, card['mana_cost'])
+    card_color = 'C' if len(colors) == 0 else colors[0]
+
+    for color in colors:
+        if not color == card_color:
+            card_color = 'MC'
+            break
+
+    return body.replace('CARDBACKGROUND', f'server/card_templates/{color_backgrounds[card_color]}')
+
+    
+
 def updateBody(card):
-    html = body.replace('NAME', card['name'])
+    html = setBackground(card, body)
+    html = html.replace('NAME', card['name'])
     html = html.replace('MC', updateManaCost(card['mana_cost']))
     html = html.replace('TL', card['type_line'])
     html = html.replace('OT', updateManaCost(card['oracle_text']).replace('\n','<br/>'))
     html = html.replace('FT', card['flavor_text'].replace('\n','<br/>'))
     html = html.replace('PT', f'{card['power']}/{card['toughness']}' if card['power'] else '')
+    print('UPDATES DONE')
     return html
 
 
 if __name__ == '__main__':
-    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<4> <R>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
+    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
     renderCard(card, 'picture.jpg') 

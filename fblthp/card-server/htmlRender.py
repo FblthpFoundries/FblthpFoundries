@@ -1,8 +1,12 @@
+import urllib.parse
+import urllib.request
 import imgkit
 import re
 import base64
 from datetime import datetime
 import os
+import requests, urllib
+from bs4 import BeautifulSoup
 
 to_absolute = 'C:/Users/oweng/magic/fblthp/card-'
 
@@ -132,7 +136,7 @@ body = """
                     MC
                 </div>
                 <div class="image">
-                    <img src="file:///server/picture.jpg" style="width:570px;height:465px;object-fit:fill;" />
+                    <img src="SRC" style="width:570px;height:465px;object-fit:fill;" />
                 </div>
                 <div class="type_line">
                     TL
@@ -166,7 +170,11 @@ def renderCard(card, art):
 
     file_name = f'{now.strftime('%H_%M_%S_%f')}.png'
 
-    html = updateBody(card)
+    src = googleArt(card['name'])
+
+    urllib.request.urlretrieve(src, f'images/{file_name}')
+
+    html = updateBody(card).replace('SRC', f'file:///server/images/{file_name}')
     
     imgkit.from_string(html, file_name, options=options)
 
@@ -174,7 +182,27 @@ def renderCard(card, art):
 
     os.remove(file_name)
 
+    os.remove(f'images/{file_name}')
+
     return b'data:image/png;base64,' + encoded
+
+def googleArt(name):
+    query = urllib.parse.quote_plus(name)
+
+    search_url = f"https://www.google.com/search?q={query}&tbm=isch"
+
+    response = requests.get(search_url)
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+    imgs = soup.find_all('img')
+    for img in imgs:
+        print(img['src'])
+        if not 'searchlogo' in img['src']:
+            return img['src']
+
+
+    return 'server/file:///out.png'
+    
 
 mana_colors={
     'W':'#fcfcc1',

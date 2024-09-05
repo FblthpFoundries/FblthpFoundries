@@ -27,6 +27,27 @@ export async function DiscordRequest(endpoint, options) {
   return res;
 }
 
+export async function sendMessageAndImage(content, imageUrl, endpoint) {
+  const url = 'https://discord.com/api/v10/' + endpoint;
+  const imageRes = await fetch(imageUrl).then(res => res.blob());
+  let formdata = new FormData();
+  formdata.append("files[0]", imageRes, 'card.png');
+  formdata.append("payload_json", JSON.stringify({
+      content
+  }));
+  const response = await fetch(
+      url, {
+          method: 'post',
+          body: formdata,
+          headers: {
+              Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+          }
+      }
+  );
+  const data = await response.json();
+  return data;
+}
+
 export async function InstallGlobalCommands(appId, commands) {
   // API endpoint to overwrite global commands
   const endpoint = `applications/${appId}/commands`;

@@ -5,7 +5,7 @@ import {
   InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
-import { getRandomEmoji, generateCard, DiscordRequest } from './utils.js';
+import { getRandomEmoji, generateCard, DiscordRequest, sendMessageAndImage} from './utils.js';
 
 // Create an express app
 const app = express();
@@ -80,20 +80,11 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
       const card =  await generateCard(req.body.data.options)
 
-      const url = 'https://discord.com/api/v10/' + `webhooks/${process.env.APP_ID}/${req.body.token}`
-
-      let formdata = new FormData()
-
-      formdata.append('files[0]', await fetch(card).then(card_res => card_res.blob()), 'card.png')
-
-      const edit = await fetch(url,{
-        headers:{
-          Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-          'User-Agent': 'DiscordBot (https://github.com/discord/discord-example-app, 1.0.0)',
-        },
-        method: 'POST',
-        body:formdata,
-      })
+      const response = await sendMessageAndImage(
+        'Here\'s your card, ya filthy animal',
+        card,
+        `webhooks/${process.env.APP_ID}/${req.body.token}`
+      )
 
       return
        

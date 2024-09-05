@@ -1,5 +1,8 @@
 import imgkit
 import re
+import base64
+from datetime import datetime
+import os
 
 to_absolute = 'C:/Users/oweng/magic/fblthp/card-'
 
@@ -49,7 +52,7 @@ body = """
                     width:500px;
                     height:50;
                     text-align:justify;
-                    text-shadow: 5px 5px;
+                    text-shadow: 2px 2px black;
                 }
                 .mana{
                     font-family:"mana-font";
@@ -68,7 +71,7 @@ body = """
                     top:580px;
                     left:80px;
                     font-size:25px;
-                    text-shadow: 5px 5px;
+                    text-shadow: 2px 2px black;
                 }
                 .body_text{
                     position:absolute;
@@ -107,12 +110,15 @@ body = """
                     color:white;
                     font-size:50px;
                     font-family:"body-font";
-                    text-shadow: 5px 5px;
+                    text-shadow: 2px 2px black;
                 }
                 .set_symbol{
                     position:absolute;
                     top:580px;
                     left:610px;
+                }
+                #mana_cost{
+                    font-family:"mana-font";
                 }
                 
             </style>
@@ -151,20 +157,24 @@ body = """
     """
 
 def renderCard(card, art):
-    print('RECEIVED')
     options = {
         'format': 'png',
         'enable-local-file-access': ''
     }
 
+    now = datetime.now()
+
+    file_name = f'{now.strftime('%H_%M_%S_%f')}.png'
+
     html = updateBody(card)
     
+    imgkit.from_string(html, file_name, options=options)
 
-    imgkit.from_string(html, 'out.png', options=options)
+    encoded = base64.b64encode(open(file_name, 'rb').read())
 
-    print("DONE")
+    os.remove(file_name)
 
-    return html
+    return b'data:image/png;base64,' + encoded
 
 mana_colors={
     'W':'#fcfcc1',
@@ -185,12 +195,14 @@ color_backgrounds={
 }
 
 def updateManaCost(string):
+    start_font = '<span id=\"mana_cost\">'
+    end_font = '</span>'
     single_digit = r'<[0-9]>'
 
     to_replace = re.findall(single_digit, string)
 
     for mana in to_replace:
-        string = string.replace(mana,  f'<span style=\"color: #848484\">Q</span>{mana[1]}')
+        string = string.replace(mana,  f'{start_font}<span style=\"color: #848484;\">Q</span>{mana[1]}{end_font}')
 
 
     single_mana = r'<[WUBRG]>'
@@ -198,7 +210,7 @@ def updateManaCost(string):
     to_replace = re.findall(single_mana, string)
 
     for mana in to_replace:
-        string = string.replace(mana,  f'<span style=\"color:{mana_colors[mana[1]]}\">Q</span>{mana[1].lower()}')
+        string = string.replace(mana,  f'{start_font}<span style=\"color:{mana_colors[mana[1]]};\">Q</span>{mana[1].lower()}{end_font}')
 
 
     single_special = r'<[TX]>'
@@ -207,7 +219,7 @@ def updateManaCost(string):
 
     for mana in to_replace:
         char = 'X' if mana[1] == 'X' else 't'
-        string = string.replace(mana,  f'<span style=\"color: #848484\">Q</span>{char}')
+        string = string.replace(mana,  f'{start_font}<span style=\"color: #848484;\">Q</span>{char}{end_font}')
 
 
     return string
@@ -235,10 +247,9 @@ def updateBody(card):
     html = html.replace('OT', updateManaCost(card['oracle_text']).replace('\n','<br/>'))
     html = html.replace('FT', card['flavor_text'].replace('\n','<br/>'))
     html = html.replace('PT', f'{card['power']}/{card['toughness']}' if card['power'] else '')
-    print('UPDATES DONE')
     return html
 
 
 if __name__ == '__main__':
-    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
+    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST \n<X> <T>: Kill X cards","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
     renderCard(card, 'picture.jpg') 

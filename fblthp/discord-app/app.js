@@ -80,17 +80,23 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
       const card =  await generateCard(req.body.data.options)
 
+      const url = 'https://discord.com/api/v10/' + `webhooks/${process.env.APP_ID}/${req.body.token}`
 
-      const edit = await DiscordRequest(`webhooks/${process.env.APP_ID}/${req.body.token}`,
-        {
-          method: 'POST',
-          body :{
-            content: card,
-          },
-        }
-      )
+      let formdata = new FormData()
 
-      return 
+      formdata.append('files[0]', await fetch(card).then(card_res => card_res.blob()), 'card.png')
+
+      const edit = await fetch(url,{
+        headers:{
+          Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
+          'User-Agent': 'DiscordBot (https://github.com/discord/discord-example-app, 1.0.0)',
+        },
+        method: 'POST',
+        body:formdata,
+      })
+
+      return
+       
     }
 
     console.error(`unknown command: ${name}`);

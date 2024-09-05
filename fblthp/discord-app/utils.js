@@ -61,8 +61,6 @@ export async function generateCard(options){
     method: 'GET',
   }).then((res) =>{ card = res.text()})
 
-  console.log(card)
-
   return card
 
 

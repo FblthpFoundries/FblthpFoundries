@@ -80,11 +80,10 @@ def create_app():
 
         card = tokenizer.batch_decode(output)[0].split('<eos>')[0].replace('—', '-').replace('\u2212', '-')
 
-        return card
+        return htmlRender.renderCard(parse_card_data(card)[0], 'picture.jpg') 
 
     @app.route('/test', methods = ['GET'])
     def test():
-        print('received')
         card = makeCard()
         return htmlRender.renderCard(parse_card_data(card)[0], 'picture.jpg') 
     

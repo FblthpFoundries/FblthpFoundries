@@ -78,14 +78,24 @@ def create_app():
             max_length =200,
         )
 
-        card = tokenizer.batch_decode(output)[0].split('<eos>')[0].replace('—', '-').replace('\u2212', '-')
+        card = tokenizer.batch_decode(output)[0].split('<eos>')[0]#.replace('—', '-').replace('\u2212', '-')
 
         return htmlRender.renderCard(parse_card_data(card)[0], 'picture.jpg') 
 
     @app.route('/test', methods = ['GET'])
     def test():
-        card = makeCard()
-        return htmlRender.renderCard(parse_card_data(card)[0], 'picture.jpg') 
+        text = '<tl>'
+        encoded_input = tokenizer(text, return_tensors='pt').to(device)
+        model.to(device)
+        output = model.generate(
+            **encoded_input,
+            do_sample=True,
+            temperature = 0.9,
+            max_length =200,
+        )
+
+        card = tokenizer.batch_decode(output)[0].split('<eos>')[0]#.replace('—', '-').replace('\u2212', '-')
+        return card
     
     return app
 

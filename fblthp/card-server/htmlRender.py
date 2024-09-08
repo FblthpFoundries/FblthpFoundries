@@ -95,7 +95,6 @@ body = """
                     font-style:italic;
                     font-family:"flavor-font";
                     height:auto;
-                    text-align:right;
                     margin-top:10px;
                 }
                 .image{
@@ -123,6 +122,10 @@ body = """
                 }
                 #mana_cost{
                     font-family:"mana-font";
+                }
+                #reminder{
+                    font-family:"flavor-font";
+                    font-style:italic;
                 }
                 
             </style>
@@ -196,7 +199,6 @@ def googleArt(name):
     soup = BeautifulSoup(response.text, 'html.parser')
     imgs = soup.find_all('img')
     for img in imgs:
-        print(img['src'])
         if not 'searchlogo' in img['src']:
             return img['src']
 
@@ -207,6 +209,7 @@ def googleArt(name):
 mana_colors={
     'W':'#fcfcc1',
     'B':'#848484',
+    'C':'#848484',
     'U':'#67c1f5',
     'R':'#f85555',
     'G':'#26b569',
@@ -233,7 +236,7 @@ def updateManaCost(string):
         string = string.replace(mana,  f'{start_font}<span style=\"color: #848484;\">Q</span>{mana[1]}{end_font}')
 
 
-    single_mana = r'<[WUBRG]>'
+    single_mana = r'<[WUBRGC]>'
 
     to_replace = re.findall(single_mana, string)
 
@@ -265,19 +268,42 @@ def setBackground(card, body):
 
     return body.replace('CARDBACKGROUND', f'server/card_templates/{color_backgrounds[card_color]}')
 
+
+def formatOracleText(card):
+    reminderRegex = r'\((.*?)\)'
+
+    if re.search(reminderRegex, card):
+        card = re.sub(reminderRegex, r'(<span id="reminder">\1</span>)', card)
+
+
+    card = card.replace('\n', '<br/>')
+    return updateManaCost(card)
+
+def formatFlavorText(card):
+    emdash = r'—'
+
+    pos = re.search(emdash, card)
+
+    if pos:
+        print(pos.start())
+        begin, end = card[:pos.start()], card[pos.start():]
+
+        card = begin + '<div style=\"text-align:right\">' + end + '</div>'
+
+    return card.replace('\n', '<br/>')
     
 
 def updateBody(card):
     html = setBackground(card, body)
     html = html.replace('NAME', card['name'])
-    html = html.replace('MC', updateManaCost(card['mana_cost']))
+    html = html.replace('MC', updateManaCost(card['mana_cost']) if not card['mana_cost'] == 'nan' else '')
     html = html.replace('TL', card['type_line'])
-    html = html.replace('OT', updateManaCost(card['oracle_text']).replace('\n','<br/>'))
-    html = html.replace('FT', card['flavor_text'].replace('\n','<br/>'))
+    html = html.replace('OT', formatOracleText(card['oracle_text']))
+    html = html.replace('FT', formatFlavorText(card['flavor_text']))
     html = html.replace('PT', f'{card['power']}/{card['toughness']}' if card['power'] else '')
     return html
 
 
 if __name__ == '__main__':
-    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST \n<X> <T>: Kill X cards","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
+    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always\n —succeed.","loyalty":"","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST \n<X> <T>: Kill X cards\n Kicker <2> (No body reads the reminder text <B>)","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
     renderCard(card, 'picture.jpg') 

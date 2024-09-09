@@ -80,11 +80,25 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
 
       const card =  await generateCard(req.body.data.options)
 
-      const response = await sendMessageAndImage(
-        'Here\'s your card, ya filthy animal',
-        card,
-        `webhooks/${process.env.APP_ID}/${req.body.token}`
-      )
+      if(card === ''){
+        await DiscordRequest(
+          `webhooks/${process.env.APP_ID}/${req.body.token}`,
+          {
+            method:'POST',
+            body: {
+              content: "we made a fucky wucky"
+            }
+          }
+        )
+
+      }else{
+
+        const response = await sendMessageAndImage(
+          'Here\'s your card, ya filthy animal',
+          card,
+          `webhooks/${process.env.APP_ID}/${req.body.token}`
+        )
+      }
 
       return
        

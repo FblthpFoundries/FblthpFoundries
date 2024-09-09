@@ -187,7 +187,7 @@ def renderCard(card, art):
 
     os.remove(f'images/{file_name}')
 
-    return b'data:image/png;base64,' + encoded
+    return (b'data:image/png;base64,' + encoded).decode()
 
 def googleArt(name):
     query = urllib.parse.quote_plus(name)

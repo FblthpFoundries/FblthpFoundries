@@ -2,6 +2,7 @@ import 'dotenv/config';
 import './addRequire.js' 
 
 export const cardServer = 'http://card-server:5001'
+const axios = require('axios')
 
 export async function DiscordRequest(endpoint, options) {
   // append endpoint to root API URL
@@ -75,14 +76,19 @@ export function capitalize(str) {
 
 
 export async function generateCard(options){
+  let type_line = ''
 
-  var card = ''
+  if(options && options.length > 0){
+    type_line = options[0]['value']
+  }
 
-  await fetch(cardServer + '/make_card',{
-    method: 'GET',
-  }).then((res) =>{ card = res.text()})
+  const res = await axios.post(`${cardServer}/make_card`, {text:type_line})
 
-  return card
+  if(res.status != 200){
+    return ''
+  }
+  
+  return res.data['card']
 
 
 }

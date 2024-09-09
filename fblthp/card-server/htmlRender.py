@@ -120,6 +120,25 @@ body = """
                     top:580px;
                     left:610px;
                 }
+                img.loyalty{
+                    position:absolute;
+                    width: 120;
+                    height: 75;
+                    left:540px;
+                    top:930px;
+                }
+                div.loyalty{    
+                    position:absolute;
+                    width: 120;
+                    height: 75;
+                    left:540px;
+                    top:945px;
+                    color:white;
+                    font-family:"body-font";
+                    font-size:50px;
+                    text-align:center;
+                }
+                
                 #mana_cost{
                     font-family:"mana-font";
                 }
@@ -158,10 +177,18 @@ body = """
                 <div class="pt">
                     PT
                 </div>
+                LOYALTY
             </div>
         </body>
     </html>
     """
+
+loyalty = """
+    <img src='/server/card_templates/Loyalty.png' class='loyalty'/>
+    <div class = "loyalty" >
+        NUM
+    </div>
+"""
 
 def renderCard(card, art):
     options = {
@@ -301,9 +328,11 @@ def updateBody(card):
     html = html.replace('OT', formatOracleText(card['oracle_text']))
     html = html.replace('FT', formatFlavorText(card['flavor_text']))
     html = html.replace('PT', f'{card['power']}/{card['toughness']}' if card['power'] else '')
+    if card['loyalty']:
+        html = html.replace('LOYALTY', loyalty.replace('NUM', card['loyalty']))
     return html
 
 
 if __name__ == '__main__':
-    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always\n —succeed.","loyalty":"","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST \n<X> <T>: Kill X cards\n Kicker <2> (No body reads the reminder text <B>)","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
+    card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always\n —succeed.","loyalty":"5","mana_cost":"<U> <W>","name":"Goblin Looter","oracle_text":"This is a big huge test \n TEST \n<X> <T>: Kill X cards\n Kicker <2> (No body reads the reminder text <B>)","power":"","toughness":"","type_line":"Creature - Goblin Rogue"}
     renderCard(card, 'picture.jpg') 

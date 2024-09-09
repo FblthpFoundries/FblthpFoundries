@@ -17,7 +17,7 @@ def create_app():
 
         args = request.get_json()
 
-        text = None if args['text'] == '' else args['text']
+        text = None if args['text'] == '' else args['text'].replace('/', '\\')
         
         card = htmlRender.renderCard(factory.consume(text), 'picture.jpg')
 

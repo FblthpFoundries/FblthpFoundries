@@ -82,7 +82,9 @@ export async function generateCard(options){
     type_line = options[0]['value']
   }
 
-  const res = await axios.post(`${cardServer}/make_card`, {text:type_line})
+  const res = await axios.post(`${cardServer}/make_card`, {text:type_line}).catch(
+    err => console.log(err)
+  )
 
   if(res.status != 200){
     return ''

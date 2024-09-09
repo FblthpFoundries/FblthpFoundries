@@ -1,6 +1,6 @@
 import secret_tokens
 from transformers import AutoTokenizer, AutoModelForCausalLM
-import threading, re
+import threading, re, json
 
 def parse_card_data(input_text):
     cards = []
@@ -68,12 +68,16 @@ class Factory():
             **encoded_input,
             do_sample=True,
             temperature = 0.9,
-            max_length =200,
+            max_length =400,
         )
 
-        card = self.tokenizer.batch_decode(output)[0].split('<eos>')
-        for card in parse_card_data(''.join(card[:-1])):
+        cards = self.tokenizer.batch_decode(output)[0].split('<eos>')
+        cards = parse_card_data(''.join(cards[:-1]))
+        for card in cards:
             self.queue.append(card)
+
+        if len(cards) == 0:
+            self.__populate(text)
 
     def consume(self, text = None):
         card = {}

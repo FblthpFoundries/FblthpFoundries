@@ -4,4 +4,4 @@ cards.csv
 corpus.csv
 *.pyc
 fblthp/out/*
-fblthp/constants.py
+fblthp/helpers/constants.py

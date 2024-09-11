@@ -108,7 +108,7 @@ if __name__ == "__main__":
 
     card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<4> <R>","name":"Goblin Looter","oracle_text":"Goblin Looter enters with two oil counters on it. \n <T>: Goblin Looter gains flying until end of turn.","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
 
-    render_card(card, 'C:\\Users\\oweng\\magic\\fblthp\\stormCrow.jpg') 
+    render_card(card, PROXYSHOP_PATH + '\\..\\stormCrow.jpg') 
     
     #render_folder(args.folder)
     # fd = "C:\\Users\\Sam\\Documents\\FblthpFoundries\\fblthp\\art\\out\\run"

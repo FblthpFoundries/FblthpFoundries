@@ -1,0 +1,63 @@
+# Fblthp Foundries card generation rules configuration
+
+
+
+
+#Card generation settings
+
+generate_flavor_text: true         # Whether to generate flavor text for cards
+max_flavor_text_length: 300       # Max length for flavor text on a card
+
+
+# General generation rules
+generation_rules:
+  cards_per_batch: 20           # How many cards to generate
+  custom_art_generation: true   # Enable custom art generation for each card
+  art_generator: DALL-E           # Specify the art generator to use (DALL-E or SD3)
+  
+
+
+# Card generation rules
+cards:
+  rarity_distribution:
+    common: 50                      # Percentage chance to generate a common card
+    uncommon: 30                    # Percentage chance to generate an uncommon card
+    rare: 15                        # Percentage chance to generate a rare card
+    mythic: 5                       # Percentage chance to generate a mythic rare card
+  card_type_weights:
+    creature: 40                      # Percentage chance to generate a creature
+    instant: 15                       # Percentage chance to generate an instant
+    sorcery: 15                       # Percentage chance to generate a sorcery
+    enchantment: 10                   # Percentage chance to generate an enchantment
+    artifact: 10                      # Percentage chance to generate an artifact
+    planeswalker: 5                   # Percentage chance to generate a planeswalker
+    land: 5      
+
+# Color identity settings
+color_identity:
+  allow_colorless: true             # Whether colorless cards are allowed
+  color_weights:
+    white: 20                       # Percentage chance for a white card
+    blue: 20                        # Percentage chance for a blue card
+    black: 20                       # Percentage chance for a black card
+    red: 20                         # Percentage chance for a red card
+    green: 20                       # Percentage chance for a green card
+    multicolor_chance: 25           # Percentage chance that a card will be multicolored
+
+# Keyword ability generation
+abilities:
+  max_keyword_permanent: 3          # Maximum number of keyword abilities for permanent cards
+  max_keyword_instant_sorcery: 2    # Maximum number of keyword abilities for instant/sorcery
+
+# Synergy and balance
+synergy_settings:
+  enable_synergy: true              # Whether to enable synergy between generated cards
+  synergy_threshold: 0.8            # Threshold for re-rolling a card if it doesn't fit well with previous cards
+  synergistic_color_pairs:          # Favor synergy within these color combinations
+    - "white-blue"
+    - "black-green"
+    - "red-blue"
+
+# Advanced settings
+advanced:
+

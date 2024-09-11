@@ -197,14 +197,10 @@ def renderCard(card, art):
     }
 
     now = datetime.now()
-
+    
     file_name = f'{now.strftime('%H_%M_%S_%f')}.png'
 
-    src = googleArt(card['name'])
-
-    urllib.request.urlretrieve(src, f'images/{file_name}')
-
-    html = updateBody(card).replace('SRC', f'file:///server/images/{file_name}')
+    html = updateBody(card).replace('SRC', f'file:///server/{art}')
     
     imgkit.from_string(html, file_name, options=options)
 
@@ -212,25 +208,10 @@ def renderCard(card, art):
 
     os.remove(file_name)
 
-    os.remove(f'images/{file_name}')
+    os.remove(art)
 
     return (b'data:image/png;base64,' + encoded).decode()
 
-def googleArt(name):
-    query = urllib.parse.quote_plus(name)
-
-    search_url = f"https://www.google.com/search?q={query}&tbm=isch"
-
-    response = requests.get(search_url)
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-    imgs = soup.find_all('img')
-    for img in imgs:
-        if not 'searchlogo' in img['src']:
-            return img['src']
-
-
-    return 'server/file:///out.png'
     
 
 mana_colors={

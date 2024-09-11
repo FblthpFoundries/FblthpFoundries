@@ -1,6 +1,9 @@
-import secret_tokens
+import secret_tokens, artFactory
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import threading, re, json
+
+MAX = 500
+MIN = 10
 
 def parse_card_data(input_text):
     cards = []
@@ -59,25 +62,43 @@ class Factory():
 
         self.queue = []
         self.lock = threading.Lock()
-        self.__populate()
+        t = threading.Thread(target=self.ensureGirth)
+        t.start()
 
     def __populate(self, text = '<tl>'):
         encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
+        maxLength = 800
+        if not text == '<tl>':
+            maxLength = 200
         self.model.to(self.device)
         output = self.model.generate(
             **encoded_input,
             do_sample=True,
             temperature = 0.9,
-            max_length =400,
+            max_length =maxLength,
         )
 
         cards = self.tokenizer.batch_decode(output)[0].split('<eos>')
         cards = parse_card_data(''.join(cards[:-1]))
         for card in cards:
-            self.queue.append(card)
+            self.queue.append((card, artFactory.getGoogleArt(card)))
 
         if len(cards) == 0:
             self.__populate(text)
+
+    def ensureGirth(self,):
+        while len(self.queue) > MAX:
+            self.lock.acquire()
+            self.queue().pop()
+            self.lock.release()
+
+        while len(self.queue) < MIN:
+            self.lock.acquire()
+            self.__populate() 
+            self.lock.release()
+
+
+
 
     def consume(self, text = None):
         card = {}
@@ -87,10 +108,12 @@ class Factory():
             self.__populate(text)
             card = self.queue.pop(length)
         else:
-            if len(self.queue) == 0:
-                self.__populate()
             card =  self.queue.pop()
+
         self.lock.release()
 
-        return card
+        t = threading.Thread(target=self.ensureGirth)
+        t.start()
+
+        return card[0], card[1]
 

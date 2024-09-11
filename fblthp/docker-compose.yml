@@ -2,7 +2,7 @@ services:
     card-server:
         image: fblthp-server
         build: card-server/
-        command:  python -m flask run -p 5001 -h 0.0.0.0 
+        command: sh -c "rm /server/images/*.png && python -m flask run -p 5001 -h 0.0.0.0 "
         ports:
             - 5001:5001
 

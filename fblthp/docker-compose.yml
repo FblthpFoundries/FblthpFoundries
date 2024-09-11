@@ -29,7 +29,7 @@ services:
     discord-bot:
         image: fblthp-discord-bot
         build: discord-app/
-        command: npm run start
+        command: sh -c "npm run register && npm run start"
         ports:
             - 5000:5000
 

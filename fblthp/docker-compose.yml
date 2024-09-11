@@ -2,7 +2,7 @@ services:
     card-server:
         image: fblthp-server
         build: card-server/
-        command: python -m flask run -p 5001 -h 0.0.0.0
+        command: sh -c "rm /server/images/*.png && python -m flask run -p 5001 -h 0.0.0.0 "
         ports:
             - 5001:5001
 
@@ -25,6 +25,19 @@ services:
                         -   driver: nvidia
                             count: 1
                             capabilities: [gpu]
+
+    discord-bot:
+        image: fblthp-discord-bot
+        build: discord-app/
+        command: sh -c "npm run register && npm run start"
+        ports:
+            - 5000:5000
+
+        networks:
+            - app-comm
+
+        volumes:
+            - ./discord-app:/discord-app
     
 volumes:
     card-storage:

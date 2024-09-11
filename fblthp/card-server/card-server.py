@@ -17,16 +17,36 @@ def create_app():
 
         args = request.get_json()
 
+        if not 'text' in args:
+            return 'fuck you bitch', 400
+
         text = None if args['text'] == '' else args['text'].replace('/', '\\')
+
+        card, art = factory.consume(text)
         
-        card = htmlRender.renderCard(factory.consume(text), 'picture.jpg')
+        card = htmlRender.renderCard(card, art)
 
         return jsonify({'card':card})
     
 
+    @app.route('/make_many_cards', methods = ['POST'])
+    def makeManyCards():
+        args = request.get_json()
+
+        if not 'num' in args:
+            return 'fuck you bitch', 400
+        
+        num = args['num']
+
+        for i in range(num):
+            factory.consume()
+
+        return jsonify({'cards':'card'})
+    
+
     @app.route('/test', methods = ['GET'])
     def test():
-        return jsonify({'card':factory.consume()})
+        return jsonify({'card':factory.consume()[0]})
     
     return app
 

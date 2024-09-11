@@ -6,4 +6,4 @@ EXPOSE 5000
 
 WORKDIR /discord-app
 
-CMD ["npm", "run register"]
+CMD ["npm", "install"]

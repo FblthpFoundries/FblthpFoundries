@@ -7,3 +7,4 @@ fblthp/out/*
 fblthp/helpers/constants.py
 fblthp/discord-app/.env
 fblthp/cube-app/secret_tokens.py
+fblthp/abilities.json

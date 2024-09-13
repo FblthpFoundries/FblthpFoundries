@@ -490,12 +490,29 @@ class MainWindow(QWidget):
         tableRow.appendChild(root.createTextNode(row))
         cardTag.appendChild(tableRow)
 
+        props = root.createElement('prop')
+
+        typeTag = root.createElement('type')
+        typeTag.appendChild(root.createTextNode(card.type))
+        props.appendChild(typeTag)
+
+        if card.power and card.toughness:
+            pt = root.createElement('pt')
+            pt.appendChild(root.createTextNode(f'{card.power}/{card.toughness}'))
+            props.appendChild(pt)
+        if card.loyalty:
+            loyalty = root.createElement('loyalty')
+            loyalty.appendChild(root.createTextNode(card.loyalty))
+            props.appendChild(loyalty)
+
+        cardTag.appendChild(props)
+
         return cardTag
 
     def toXML(self, fileName):
         root = minidom.Document()
 
-        xml = root.createElement('cockatrice_cardbase')
+        xml = root.createElement('cockatrice_carddatabase')
         xml.setAttribute('version', '4')
         root.appendChild(xml)
 

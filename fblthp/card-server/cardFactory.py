@@ -35,6 +35,8 @@ def parse_card_data(input_text):
         
         ot = re.search(ot_pattern, card_match)
         card['oracle_text'] = re.sub(r'<nl>', '\n', ot.group(1).strip()) if ot else None
+        if not card['oracle_text'] :
+                continue
         card['oracle_text'] = card['oracle_text'].replace('<br>', '\n')
         card['oracle_text'] = card['oracle_text'].replace('~', card['name'])
         

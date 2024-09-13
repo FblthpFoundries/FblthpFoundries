@@ -1,7 +1,10 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 import re, threading
 import secret_tokens
 from magicCard import Card
+
+batchSize = 5
 
 class Factory():
     def __init__(self):
@@ -12,7 +15,7 @@ class Factory():
         self.cards = []
 
     def __cardGen(self, updateFunc = None):
-        text = '<tl>'
+        text = ['<tl>'] * batchSize
         encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
         output = self.model.generate(
             **encoded_input,
@@ -20,9 +23,18 @@ class Factory():
             temperature = 0.9,
             max_length =400,
         )
-        cardTokens = self.tokenizer.batch_decode(output)[0].split('<eos>')
-        cardTokens = self.parse_card_data(''.join(cardTokens[:-1]))
 
+        cardOutput = self.tokenizer.batch_decode(output)
+        cardTokens = ''
+        #collect all but last card from each batch
+        #last card often is cut off by max_length
+        for batch in cardOutput:
+            for card in batch.split('<eos>')[:-1]:
+                cardTokens += card
+
+        cardTokens = self.parse_card_data(cardTokens)
+
+        print(len(cardTokens))
 
         for card in cardTokens:
             if not self.is_valid_card(card):
@@ -32,6 +44,7 @@ class Factory():
                 updateFunc(len(self.cards))
 
     def gen_cube(self, num, update):
+        #fills up card queue untill it has enough to serve request
 
         while len(self.cards) < num:
             self.__cardGen(lambda n : update(n/num))
@@ -90,6 +103,8 @@ class Factory():
             
             ot = re.search(ot_pattern, card_match)
             card['oracle_text'] = re.sub(r'<nl>', '\n', ot.group(1).strip()) if ot else None
+            if not card['oracle_text'] :
+                continue
             card['oracle_text'] = card['oracle_text'].replace('<br>', '\n')
             card['oracle_text'] = card['oracle_text'].replace('~', card['name'])
             

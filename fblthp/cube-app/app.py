@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QSlider, QHBoxLayout
 )
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
+from xml.dom import minidom
 import sys
 import cardFactory
 
@@ -202,6 +203,35 @@ class SettingsWidget(QWidget):
 
 
 
+
+class FileWidget(QWidget):
+    saveSignal = pyqtSignal(str)
+
+    def __init__(self, parent = None):
+        super().__init__(parent)
+
+        layout = QHBoxLayout()
+        self.setLayout(layout)
+
+        self.saveCards = QPushButton('Save Cards')
+        self.saveCards.clicked.connect(self.save)
+        self.loadCards = QPushButton('Load Cards')
+        self.loadCards.clicked.connect(self.load)
+        self.genArt = QPushButton('Generate Art')
+
+        layout.addWidget(self.saveCards)
+        layout.addWidget(self.loadCards)
+        layout.addWidget(self.genArt)
+
+
+
+    def save(self):
+        self.saveSignal.emit('test.xml')
+
+    def load(self):
+        pass
+
+
 class MainWindow(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,**kwargs)
@@ -218,9 +248,12 @@ class MainWindow(QWidget):
         # Create and set up widgets for the tabs
         self.card_list_widget = QWidget()
         self.settings_widget = SettingsWidget()
+        self.file_widget = FileWidget()
+        self.file_widget.saveSignal.connect(self.toXML)
 
         self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
         self.tab_widget.addTab(self.settings_widget, 'Settings')
+        self.tab_widget.addTab(self.file_widget, 'File')
 
         # Layouts for tab widgets
         self.setup_gen_widget()
@@ -251,6 +284,7 @@ class MainWindow(QWidget):
         button_layout.addWidget(self.edit_button)
 
         self.card_list_layout.addLayout(button_layout)
+
     def gen(self):
         self.disableButtons(True)
         num, ok = QInputDialog.getInt(self, 'Number to Generate', 'Enter number of cards to generate:', 10, 1, 500, 1)
@@ -296,6 +330,84 @@ class MainWindow(QWidget):
 
     def edit(self):
         pass
+
+    def createSetXML(self, root):
+        setTag = root.createElement('set')
+
+        name = root.createElement('name')
+        setTag.appendChild(name)
+        text = root.createTextNode('FFAI')
+        name.appendChild(text)
+
+        longName = root.createElement('longname')
+        setTag.appendChild(longName)
+        text = root.createTextNode('Fblthp Foundries AI generated cube')
+        longName.appendChild(text)
+
+        settype = root.createElement('settype')
+        setTag.appendChild(settype)
+        text = root.createTextNode('Custom')
+        settype.appendChild(text)
+
+        date = root.createElement('releasedate')
+        setTag.appendChild(date)
+        text = root.createTextNode('2001-09-11')
+        date.appendChild(text)
+
+        return setTag
+
+
+    def cardXML(self, card, root):
+        cardTag = root.createElement('card')
+
+        name = root.createElement('name')
+        name.appendChild(root.createTextNode(card.name))
+        cardTag.appendChild(name)
+
+        text = root.createElement('text')
+        text.appendChild(root.createTextNode(card.oracle))
+        cardTag.appendChild(text)
+
+        setTag = root.createElement('set')
+        setTag.appendChild(root.createTextNode('FFAI'))
+        cardTag.appendChild(setTag)
+
+        row = '1'
+        if 'land' in card.type.lower():
+            row = '0'
+        elif 'creature ' in card.type.lower():
+            row = '2'
+        elif 'instant' in card.type.lower() or 'sorcery' in card.type.lower():
+            row = '3'
+
+        tableRow = root.createElement('tablerow')
+        tableRow.appendChild(root.createTextNode(row))
+        cardTag.appendChild(tableRow)
+
+        return cardTag
+
+    def toXML(self, fileName):
+        root = minidom.Document()
+
+        xml = root.createElement('cockatrice_cardbase')
+        xml.setAttribute('version', '4')
+        root.appendChild(xml)
+
+        sets = root.createElement('sets')
+        sets.appendChild(self.createSetXML(root))
+        xml.appendChild(sets)
+
+        cards = root.createElement('cards')
+
+        for row in range(self.list.count()):
+            cards.appendChild(self.cardXML(self.list.item(row), root))
+
+        xml.appendChild(cards)
+
+        xml_str = root.toprettyxml(encoding = 'utf-8').decode()
+
+        with open(fileName, 'w') as f:
+            f.write(xml_str)
 
 
 if __name__ == '__main__':

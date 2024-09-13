@@ -4,9 +4,9 @@ class Card(QListWidgetItem):
     def __init__(self, cardDict):
         super().__init__()
         self.name = cardDict['name']
-        self.oracle = cardDict['oracle_text']
+        self.oracle = cardDict['oracle_text'].replace('<', '{').replace('>', '}')
         self.type = cardDict['type_line']
-        self.mc = cardDict['mana_cost'] if 'mana_cost' in cardDict else None
+        self.mc = cardDict['mana_cost'].replace('<', '{').replace('>', '}') if 'mana_cost' in cardDict else None
         self.flavor = cardDict['flavor_text'] if 'flavor_cost' in cardDict else None
         self.power = cardDict['power'] if 'power' in cardDict else None
         self.toughness = cardDict['toughness'] if 'toughness' in cardDict else None

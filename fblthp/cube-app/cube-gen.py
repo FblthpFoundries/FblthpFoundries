@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QListWidget, QPushButton, QInputDialog, QDialog, QProgressBar
+from PyQt6.QtWidgets import QApplication, QWidget, QGridLayout, QListWidget, QPushButton, QInputDialog, QDialog, QProgressBar, QTabWidget, QVBoxLayout
 from PyQt6.QtCore import QThread, pyqtSignal
 import sys
 import cardFactory
@@ -24,13 +24,27 @@ class MainWindow(QWidget):
         super().__init__(*args,**kwargs)
 
         self.setWindowTitle("Cube Gen")
-        self.setGeometry(100, 100, 400, 100)
+        self.setGeometry(100, 100, 600, 400)
 
         layout = QGridLayout(self)
         self.setLayout(layout)
 
-        self.list = QListWidget(self)
-        layout.addWidget(self.list, 0, 0, 4, 1)
+        self.tab_widget = QTabWidget(self)
+        layout.addWidget(self.tab_widget, 0, 0)
+
+        # Create and set up widgets for the tabs
+        self.card_list_widget = QWidget()
+        self.settings_widget = QWidget()
+
+        self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
+        self.tab_widget.addTab(self.settings_widget, 'Settings')
+
+        # Layouts for tab widgets
+        self.card_list_layout = QVBoxLayout(self.card_list_widget)
+        self.settings_layout = QVBoxLayout(self.settings_widget)
+
+        self.list = QListWidget(self.card_list_widget)
+        self.card_list_layout.addWidget(self.list)
 
         self.gen_button = QPushButton('Gen')
         self.gen_button.clicked.connect(self.gen)
@@ -43,9 +57,13 @@ class MainWindow(QWidget):
 
         self.buttons=[self.gen_button, self.reroll_button, self.edit_button]
 
-        layout.addWidget(self.gen_button, 0, 1)
-        layout.addWidget(self.reroll_button, 1, 1)
-        layout.addWidget(self.edit_button, 2,1)
+        button_layout = QVBoxLayout()
+        button_layout.addWidget(self.gen_button)
+        button_layout.addWidget(self.reroll_button)
+        button_layout.addWidget(self.edit_button)
+
+        self.card_list_layout.addLayout(button_layout)
+
         self.show()
 
         self.factory = cardFactory.Factory()

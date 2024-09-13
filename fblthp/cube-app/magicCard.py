@@ -12,4 +12,4 @@ class Card(QListWidgetItem):
         self.toughness = cardDict['toughness'] if 'toughness' in cardDict else None
         self.loyalty = cardDict['loyalty'] if 'loyalty' in cardDict else None
 
-        self.setText(f'{self.name}, {self.type}, {self.mc if not self.mc == 'nan' else ''}:\n {self.oracle}\n{self.power + '/' + self.toughness if self.power else ''}{self.loyalty if self.loyalty else ''}')
+        self.setText(f"{self.name}, {self.type}, {self.mc if not self.mc == 'nan' else ''}:\n {self.oracle}\n{self.power + '/' + self.toughness if self.power else ''}{self.loyalty if self.loyalty else ''}")

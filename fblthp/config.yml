@@ -1,63 +1,98 @@
-# Fblthp Foundries card generation rules configuration
-
-
-
-
-#Card generation settings
-
-generate_flavor_text: true         # Whether to generate flavor text for cards
-max_flavor_text_length: 300       # Max length for flavor text on a card
-
+# Card generation settings
 
 # General generation rules
 generation_rules:
-  cards_per_batch: 20           # How many cards to generate
-  custom_art_generation: true   # Enable custom art generation for each card
-  art_generator: DALL-E           # Specify the art generator to use (DALL-E or SD3)
-  
+  cards_per_batch: 20               # How many cards to generate in each batch
 
 
-# Card generation rules
+  theme_gpt_seeding: true
+
+  theme_override: false             # Whether to override the theme of the cards with a custom config
+  theme_override_config: nonexistent.yml # Path to the custom theme config file
+
+  sanity_check: true                # Whether to perform a sanity check on generated cards
+
+  custom_art_generation: true       # Enable custom art generation for each card
+  art_generator: DALL-E             # Specify the art generator to use (DALL-E or SD3)
+
+
+
+# Card schema rules
 cards:
-  rarity_distribution:
-    common: 50                      # Percentage chance to generate a common card
-    uncommon: 30                    # Percentage chance to generate an uncommon card
-    rare: 15                        # Percentage chance to generate a rare card
-    mythic: 5                       # Percentage chance to generate a mythic rare card
-  card_type_weights:
-    creature: 40                      # Percentage chance to generate a creature
-    instant: 15                       # Percentage chance to generate an instant
-    sorcery: 15                       # Percentage chance to generate a sorcery
-    enchantment: 10                   # Percentage chance to generate an enchantment
-    artifact: 10                      # Percentage chance to generate an artifact
-    planeswalker: 5                   # Percentage chance to generate a planeswalker
-    land: 5      
 
-# Color identity settings
-color_identity:
-  allow_colorless: true             # Whether colorless cards are allowed
-  color_weights:
-    white: 20                       # Percentage chance for a white card
-    blue: 20                        # Percentage chance for a blue card
-    black: 20                       # Percentage chance for a black card
-    red: 20                         # Percentage chance for a red card
-    green: 20                       # Percentage chance for a green card
-    multicolor_chance: 25           # Percentage chance that a card will be multicolored
+  generate_flavor_text: true         # Whether to generate flavor text for cards
+  max_flavor_text_length: 100        # Maximum length for flavor text on a card (measuered in tokens)
+
+  rarity_weights:                    # Weights for determining card rarity
+    common: 10                       
+    uncommon: 20                     
+    rare: 50                        
+    mythic: 20   
+  
+  mana:
+    color_count_distribution: [  # Distribution of the number of colors in a card
+      0.08, 
+      0.74, 
+      0.11, 
+      0.06, 
+      0.005, 
+      0.005
+      ]
+    cmc_distribution: [         # Distribution of converted mana cost
+      0.004975, 
+      0.188756, 
+      0.251741, 
+      0.205174, 
+      0.141393, 
+      0.093930, 
+      0.031045, 
+      0.021891, 
+      0.019104, 
+      0.014627, 
+      0.009154, 
+      0.006368, 
+      0.004577, 
+      0.003682, 
+      0.002687, 
+      0.000896
+      ]
+    pip_distribution: [        # Distribution of mana pip count (rolled per color on the card)
+      0.89,
+      0.1,
+      0.01
+    ]
+  typeline:
+    card_type_weights:                 # Weights for determining the card type
+      creature: 40                     
+      instant: 15                      
+      sorcery: 15                      
+      enchantment: 10                  
+      artifact: 10                     
+      planeswalker: 5                  
+      land: 5
+
+  artifact:
+    vehicle_weight: 10               # Weight for determining the likelihood of a vehicle artifact
+    equipment_weight: 10             # Weight for determining the likelihood of an equipment artifact
+    other_weight: 80                  # Weight for determining the likelihood of a non-equipment, non-vehicle artifact
+    
+    override_color_weights:                   # Weights for determining the color of an artifact
+      colorless: 58                  
+      white: 8                      
+      blue: 8                       
+      black: 8                      
+      red: 8                       
+      green: 8
+      multicolor: 2
+                         
 
 # Keyword ability generation
 abilities:
-  max_keyword_permanent: 3          # Maximum number of keyword abilities for permanent cards
-  max_keyword_instant_sorcery: 2    # Maximum number of keyword abilities for instant/sorcery
+  regenerate_custom_abilities: true    # Whether to generate custom keyword abilities
+  load_abilities: true                # Whether to load keyword abilities from a list
+
+  ability_file: abilities.json        # File containing keyword abilities 
 
 # Synergy and balance
 synergy_settings:
-  enable_synergy: true              # Whether to enable synergy between generated cards
-  synergy_threshold: 0.8            # Threshold for re-rolling a card if it doesn't fit well with previous cards
-  synergistic_color_pairs:          # Favor synergy within these color combinations
-    - "white-blue"
-    - "black-green"
-    - "red-blue"
-
-# Advanced settings
-advanced:
-
+  enable_synergy: false               # Enable synergy checks for generated cards

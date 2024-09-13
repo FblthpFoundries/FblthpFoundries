@@ -59,6 +59,22 @@ class FblthpFoundries:
         self.render_thread.start()
 
     def parse_card_data(self, input_text):
+        """
+        Parses the input text and extracts card data.
+        To be used on output coming from the GPT-2 model.
+        Args:
+            input_text (str): The input text containing card data.
+        Returns:
+            list: A list of dictionaries, where each dictionary represents a card and contains the following keys:
+                - 'type_line': The type line of the card.
+                - 'name': The name of the card.
+                - 'mana_cost': The mana cost of the card.
+                - 'oracle_text': The oracle text of the card.
+                - 'power': The power of the card.
+                - 'toughness': The toughness of the card.
+                - 'loyalty': The loyalty of the card.
+                - 'flavor_text': The flavor text of the card.
+        """
         cards = []
         # Define patterns for each part of the card
         card_pattern = r'<tl>(.*?)<\\tl>'
@@ -105,7 +121,24 @@ class FblthpFoundries:
         return cards
 
     def extract_keywords_gpt(self, card_text, model="gpt-4o-mini"):
-        chatgpt_prompt = f"""
+        '''
+        Extracts keywords from Magic: The Gathering card text and generates an image prompt for DALL-E to create an image that captures the essence of the card.
+        Args:
+            card_text (dict): A dictionary containing the following card information:
+                - 'type_line' (str): The type line of the card.
+                - 'name' (str): The name of the card.
+                - 'mana_cost' (str): The mana cost of the card.
+                - 'oracle_text' (str): The oracle text of the card.
+                - 'power' (str): The power of the card.
+                - 'toughness' (str): The toughness of the card.
+                - 'loyalty' (str): The loyalty of the card.
+                - 'flavor_text' (str): The flavor text of the card.
+                - 'rarity' (str): The rarity of the card.
+            model (str, optional): The model to use for generating the image prompt. Defaults to "gpt-4o-mini".
+        Returns:
+            tuple: A tuple containing a boolean indicating the success of the operation and the generated image prompt.
+        '''
+        prompt = f"""
         Given the following Magic: The Gathering card text, generate an image prompt for DALL-E to create an image that captures the essence of the card.:
 
         Type Line: {card_text['type_line']}
@@ -119,20 +152,30 @@ class FblthpFoundries:
         Rarity: {card_text['rarity']}
 
         Please provide a detailed description for an image that captures the essence of this card. Avoid text in the image. 
-        If there are named characters from MTG in the name, oracle text, or flavor text, do your best to incorporate them into the art.
         Simply explain what to generate. Do not mention Magic: The Gathering.
         {"Artifacts should have metallic elements." if "Artifact" in card_text['type_line'] else ""}
-        Avoid using the words "token", "permanent", "counter", and "card" in the prompt. Instead suggest specific creatures, humans, or objects in their place. Avoid urban environments, unless they are somewhat fantasy in nature.
+        Don't use the words "token", "permanent", "counter", or "card" in the prompt. Instead suggest specific creatures, humans, or objects in their place. Avoid urban environments, unless they are somewhat fantasy in nature.
         Return only JSON as output with the returned prompt stored in a "prompt" field. The prompt should be summarized in 150 tokens.
         """
         from constants import API_KEY
         openai.api_key = API_KEY
         # Send the request to ChatGPT
-        success, out = self.ask_gpt(chatgpt_prompt, model=model)
+        success, out = self.ask_gpt(prompt, model=model)
         image_prompt = out["prompt"]
         return True, image_prompt
 
     def generate_text_local(self, model_path, seed=None, text_start="<tl>", max_length=400):
+        """
+        Generates text locally using a pre-trained model.
+        Args:
+            model_path (str): The path to the pre-trained model.
+            seed (int, optional): The random seed for text generation. Defaults to None.
+            text_start (str, optional): The starting text for generation. Defaults to "<tl>".
+            max_length (int, optional): The maximum length of the generated text. Defaults to 400.
+        Returns:
+            tuple: A tuple containing a boolean indicating success or failure of text generation, and the parsed generated text.
+        """
+
         from transformers import set_seed
         from gpt import gen
         if seed:

@@ -4,7 +4,7 @@ import re, threading
 import secret_tokens
 from magicCard import Card
 
-batchSize = 5
+batchSize = 10
 
 class Factory():
     def __init__(self):
@@ -30,7 +30,7 @@ class Factory():
         #last card often is cut off by max_length
         for batch in cardOutput:
             for card in batch.split('<eos>')[:-1]:
-                cardTokens += card
+                cardTokens += card.replace('\u2212', '-').replace('\u2014', '-').replace('\u2022', '')
 
         cardTokens = self.parse_card_data(cardTokens)
 

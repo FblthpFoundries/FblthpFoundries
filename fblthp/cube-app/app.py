@@ -505,6 +505,10 @@ class MainWindow(QWidget):
             loyalty.appendChild(root.createTextNode(card.loyalty))
             props.appendChild(loyalty)
 
+        legality = root.createElement('format-limited')
+        legality.appendChild(root.createTextNode('legal'))
+        props.appendChild(legality)
+
         cardTag.appendChild(props)
 
         return cardTag

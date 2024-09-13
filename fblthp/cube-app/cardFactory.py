@@ -106,6 +106,8 @@ class Factory():
             if not card['oracle_text'] :
                 continue
             card['oracle_text'] = card['oracle_text'].replace('<br>', '\n')
+            if not card['name']:
+                continue
             card['oracle_text'] = card['oracle_text'].replace('~', card['name'])
             
             power = re.search(power_pattern, card_match)

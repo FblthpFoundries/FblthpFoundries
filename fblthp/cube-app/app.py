@@ -3,9 +3,10 @@ from PyQt6.QtWidgets import (
     QInputDialog, QDialog, QProgressBar, QTabWidget, QVBoxLayout, 
     QFormLayout, QCheckBox, QSpinBox, QComboBox, QFileDialog, QLabel, 
     QGroupBox, QLineEdit, QScrollArea, QSizePolicy, QStackedWidget, 
-    QTextEdit, QSlider, QHBoxLayout
+    QTextEdit, QSlider, QHBoxLayout, 
 )
-from PyQt6.QtCore import QThread, pyqtSignal, Qt
+from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
 import sys
 import cardFactory
 
@@ -45,7 +46,7 @@ class SettingsWidget(QWidget):
         self.add_general_settings(container_layout)
         self.add_card_text_generation_settings(container_layout)
         self.add_image_generation_settings(container_layout)
-        self.add_card_templetation_settings(container_layout)  # Added section
+        self.add_card_rendering_settings(container_layout)  # Added section
         self.update_image_gen_settings(0)
         self.update_text_gen_settings(0)
 
@@ -172,15 +173,15 @@ class SettingsWidget(QWidget):
         image_gen_layout.addRow(self.additional_prompting_label, self.additional_prompting_setting)  # Added settings
         layout.addWidget(image_gen_group)
 
-    def add_card_templetation_settings(self, layout):
-        card_template_group = QGroupBox("Card Templating")
+    def add_card_rendering_settings(self, layout):
+        card_template_group = QGroupBox("Card Rendering")
         card_template_layout = QFormLayout()
         card_template_group.setLayout(card_template_layout)
 
         # Option selector
         self.card_template_option = QComboBox()
         self.card_template_option.addItems(['Proxyshop', 'HTML Render'])
-        card_template_layout.addRow('Card Template Option:', self.card_template_option)
+        card_template_layout.addRow('Card Rendering Option:', self.card_template_option)
 
         layout.addWidget(card_template_group)
 
@@ -200,7 +201,105 @@ class SettingsWidget(QWidget):
         for widget in self.internet_search_group:
             widget.setVisible(index == 2)
 
+class ImageGenWidget(QWidget):
+    def __init__(self, card_list_widget, parent=None):
+        super().__init__(parent)
+        self.card_list_widget = card_list_widget
+        self.setLayout(QVBoxLayout())
 
+        # Button to generate images
+        self.generate_button = QPushButton('Generate Images')
+        self.generate_button.clicked.connect(self.generate_images)
+        self.layout().addWidget(self.generate_button)
+
+        # Container for image gallery
+        self.image_container = QWidget()
+        self.image_layout = QGridLayout()
+        self.image_container.setLayout(self.image_layout)
+
+        # Scroll area to hold the image gallery
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(self.image_container)
+        self.layout().addWidget(self.scroll_area)
+
+    def generate_images(self):
+        # Clear the current image gallery
+        for i in reversed(range(self.image_layout.count())):
+            widget = self.image_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+        
+        # Get card titles from the list widget
+        titles = [self.card_list_widget.item(i).text() for i in range(self.card_list_widget.count())]
+        num_images = len(titles)
+
+        # Example image generation
+        for i in range(num_images):
+            title = titles[i]
+            image_label = QLabel()
+            title_label = QLabel(self.truncate_text(title, 15))  # Truncate text to fit better
+            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            title_label.setFixedHeight(30)  # Fixed height for title
+            
+            # Placeholder image generation
+            image = QImage(300, 300, QImage.Format.Format_RGB888)  # Larger placeholder image
+            image.fill(Qt.GlobalColor.blue)  # Fill with blue color as placeholder
+            pixmap = QPixmap.fromImage(image)
+            image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+            
+            # Create a vertical layout for title and image
+            vertical_layout = QVBoxLayout()
+            vertical_layout.addWidget(title_label)
+            vertical_layout.addWidget(image_label)
+            vertical_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for tighter layout
+            vertical_widget = QWidget()
+            vertical_widget.setLayout(vertical_layout)
+            
+            # Add to grid layout (2 images wide)
+            self.image_layout.addWidget(vertical_widget, i // 2, i % 2)
+
+    def load_image(self, file_path):
+        if os.path.exists(file_path):
+            image = QImage(file_path)
+            if not image.isNull():
+                pixmap = QPixmap.fromImage(image)
+                return pixmap
+        return None
+
+    def update_gallery(self, image_paths):
+        # Clear existing images
+        for i in reversed(range(self.image_layout.count())):
+            widget = self.image_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+
+        # Add new images to the gallery
+        titles = [self.card_list_widget.item(i).text() for i in range(len(image_paths))]
+        for i, (path, title) in enumerate(zip(image_paths, titles)):
+            pixmap = self.load_image(path)
+            if pixmap:
+                image_label = QLabel()
+                image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+                title_label = QLabel(self.truncate_text(title, 15))  # Truncate text to fit better
+                title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                title_label.setFixedHeight(30)  # Fixed height for title
+                
+                # Create a vertical layout for title and image
+                vertical_layout = QVBoxLayout()
+                vertical_layout.addWidget(title_label)
+                vertical_layout.addWidget(image_label)
+                vertical_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for tighter layout
+                vertical_widget = QWidget()
+                vertical_widget.setLayout(vertical_layout)
+                
+                self.image_layout.addWidget(vertical_widget, i // 2, i % 2)
+
+    def truncate_text(self, text, max_length):
+        """ Truncate the text to a maximum length and add '...' if it's too long. """
+        if len(text) > max_length:
+            return text[:max_length] + '...'
+        return text
 
 class MainWindow(QWidget):
     def __init__(self, *args, **kwargs):
@@ -217,13 +316,21 @@ class MainWindow(QWidget):
 
         # Create and set up widgets for the tabs
         self.card_list_widget = QWidget()
-        self.settings_widget = SettingsWidget()
-
-        self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
-        self.tab_widget.addTab(self.settings_widget, 'Settings')
 
         # Layouts for tab widgets
         self.setup_gen_widget()
+
+
+        self.image_gen_widget = ImageGenWidget(self.list)
+        self.rendering_widget = QWidget()
+        self.settings_widget = SettingsWidget()
+
+        self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
+        self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')
+        self.tab_widget.addTab(self.rendering_widget, 'Card Rendering')
+        self.tab_widget.addTab(self.settings_widget, 'Settings')
+
+        
 
         self.show()
 

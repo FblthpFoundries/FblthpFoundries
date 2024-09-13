@@ -120,7 +120,7 @@ class FblthpFoundries:
 
         return cards
 
-    def extract_keywords_gpt(self, card_text, model="gpt-4o-mini"):
+    def extract_keywords_gpt(self, card_text, model="gpt-4o-mini", additional_prompt="", max_chars=800):
         '''
         Extracts keywords from Magic: The Gathering card text and generates an image prompt for DALL-E to create an image that captures the essence of the card.
         Args:
@@ -155,7 +155,8 @@ class FblthpFoundries:
         Simply explain what to generate. Do not mention Magic: The Gathering.
         {"Artifacts should have metallic elements." if "Artifact" in card_text['type_line'] else ""}
         Don't use the words "token", "permanent", "counter", or "card" in the prompt. Instead suggest specific creatures, humans, or objects in their place. Avoid urban environments, unless they are somewhat fantasy in nature.
-        Return only JSON as output with the returned prompt stored in a "prompt" field. The prompt should be summarized in 150 tokens.
+        {additional_prompt}
+        Return only JSON as output with the returned prompt stored in a "prompt" field. The prompt should be summarized in {max_chars} characters.
         """
         from constants import API_KEY
         openai.api_key = API_KEY

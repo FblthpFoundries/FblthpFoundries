@@ -1,9 +1,11 @@
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QGridLayout, QListWidget, QPushButton, 
     QInputDialog, QDialog, QProgressBar, QTabWidget, QVBoxLayout, 
-    QFormLayout, QCheckBox, QSpinBox, QComboBox, QFileDialog, QLabel, QLineEdit
+    QFormLayout, QCheckBox, QSpinBox, QComboBox, QFileDialog, QLabel, 
+    QGroupBox, QLineEdit, QScrollArea, QSizePolicy, QStackedWidget, 
+    QTextEdit, QSlider, QHBoxLayout
 )
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, Qt
 import sys
 import cardFactory
 
@@ -26,148 +28,186 @@ class WorkerThread(QThread):
 class SettingsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        
-        # Set up layout
-        layout = QFormLayout(self)
-        self.setLayout(layout)
 
-        # General Generation Rules
+        # Create the main layout for the SettingsWidget
+        main_layout = QVBoxLayout(self)
+
+        # Create a scrollable area
+        scroll_area = QScrollArea(self)
+        scroll_area.setWidgetResizable(True)
+
+        # Create a container widget for the scrollable area
+        container_widget = QWidget()
+        container_layout = QVBoxLayout(container_widget)
+        container_widget.setLayout(container_layout)
+
+        # Add sections to the container widget
+        self.add_general_settings(container_layout)
+        self.add_card_text_generation_settings(container_layout)
+        self.add_image_generation_settings(container_layout)
+        self.add_card_templetation_settings(container_layout)  # Added section
+        self.update_image_gen_settings(0)
+        self.update_text_gen_settings(0)
+
+        # Set the container widget as the scroll area's widget
+        scroll_area.setWidget(container_widget)
+
+        # Add the scroll area to the main layout
+        main_layout.addWidget(scroll_area)
+
+    def add_general_settings(self, layout):
+        general_group = QGroupBox("General Settings")
+        general_layout = QFormLayout()
+        general_group.setLayout(general_layout)
+
+        # Add general settings widgets
         self.cards_per_batch = QSpinBox()
         self.cards_per_batch.setValue(20)
-        layout.addRow('Cards per Batch:', self.cards_per_batch)
 
-        self.theme_gpt_seeding = QCheckBox()
-        self.theme_gpt_seeding.setChecked(True)
-        layout.addRow('Theme GPT Seeding:', self.theme_gpt_seeding)
+        self.save_intermediates = QCheckBox('Save Intermediate Files')
 
-        self.theme_override = QCheckBox()
-        self.theme_override.setChecked(False)
-        layout.addRow('Theme Override:', self.theme_override)
+        general_layout.addRow('Cards per Batch:', self.cards_per_batch)
+        general_layout.addRow(self.save_intermediates)
 
-        self.theme_override_config = QPushButton('Select Theme Config')
-        self.theme_override_config.clicked.connect(self.select_theme_config)
-        self.theme_override_config_path = QLabel('nonexistent.yml')
-        layout.addRow('Theme Override Config:', self.theme_override_config_path)
+        layout.addWidget(general_group)
 
-        self.sanity_check = QCheckBox()
-        self.sanity_check.setChecked(True)
-        layout.addRow('Sanity Check:', self.sanity_check)
+    def add_card_text_generation_settings(self, layout):
+        card_text_group = QGroupBox("Card Text Generation")
+        card_text_layout = QFormLayout()
+        card_text_group.setLayout(card_text_layout)
 
-        self.custom_art_generation = QCheckBox()
-        self.custom_art_generation.setChecked(True)
-        layout.addRow('Custom Art Generation:', self.custom_art_generation)
+        # Option selector
+        self.text_gen_option = QComboBox()
+        self.text_gen_option.addItems(['Local GPT-2', 'GPT-4o-mini'])
+        self.text_gen_option.currentIndexChanged.connect(self.update_text_gen_settings)
+        card_text_layout.addRow('Text Generation Option:', self.text_gen_option)
 
-        self.art_generator = QComboBox()
-        self.art_generator.addItems(['DALL-E', 'SD3'])
-        layout.addRow('Art Generator:', self.art_generator)
+        # GPT-2 specific settings
 
-        # Card Schema Rules
-        self.generate_flavor_text = QCheckBox()
-        self.generate_flavor_text.setChecked(True)
-        layout.addRow('Generate Flavor Text:', self.generate_flavor_text)
+        self.gpt2_group = []
+        for widget in self.gpt2_group:
+            widget.setVisible(False)
 
-        self.max_flavor_text_length = QSpinBox()
-        self.max_flavor_text_length.setValue(100)
-        layout.addRow('Max Flavor Text Length:', self.max_flavor_text_length)
+        # GPT-4o-mini specific settings
 
-        # Rarity Weights (for simplicity, using QSpinBox)
-        self.rarity_weights = {
-            'common': QSpinBox(),
-            'uncommon': QSpinBox(),
-            'rare': QSpinBox(),
-            'mythic': QSpinBox()
-        }
-        for rarity, widget in self.rarity_weights.items():
-            widget.setValue(10 if rarity == 'common' else (20 if rarity == 'uncommon' else (50 if rarity == 'rare' else 20)))
-            layout.addRow(f'{rarity.capitalize()} Weight:', widget)
+        self.theme_seeding = QCheckBox('Theme Seeding')
+        self.sanity_check = QCheckBox('Sanity Check')
+        
+        self.gpt4o_mini_group = [self.theme_seeding, self.sanity_check]
+        for widget in self.gpt4o_mini_group:
+            widget.setVisible(False)
 
-        # Mana Schema
-        # Simplified for brevity
-        self.color_count_distribution = QLineEdit('0.08, 0.74, 0.11, 0.06, 0.005, 0.005')
-        layout.addRow('Color Count Distribution:', self.color_count_distribution)
+        # Add settings widgets
+        card_text_layout.addRow(self.theme_seeding)
+        card_text_layout.addRow(self.sanity_check)
+        layout.addWidget(card_text_group)
 
-        self.cmc_distribution = QLineEdit('0.004975, 0.188756, 0.251741, 0.205174, 0.141393, 0.093930, 0.031045, 0.021891, 0.019104, 0.014627, 0.009154, 0.006368, 0.004577, 0.003682, 0.002687, 0.000896')
-        layout.addRow('CMC Distribution:', self.cmc_distribution)
+    def add_image_generation_settings(self, layout):
+        image_gen_group = QGroupBox("Image Generation")
+        image_gen_layout = QFormLayout()
+        image_gen_group.setLayout(image_gen_layout)
 
-        self.pip_distribution = QLineEdit('0.89, 0.1, 0.01')
-        layout.addRow('Pip Distribution:', self.pip_distribution)
+        # Option selector
+        self.image_gen_option = QComboBox()
+        self.image_gen_option.addItems(['SD3', 'DALL-E', 'Internet Search']) 
+        self.image_gen_option.currentIndexChanged.connect(self.update_image_gen_settings)
+        image_gen_layout.addRow('Image Generation Option:', self.image_gen_option)
 
-        # Typeline
-        self.card_type_weights = {
-            'creature': QSpinBox(),
-            'instant': QSpinBox(),
-            'sorcery': QSpinBox(),
-            'enchantment': QSpinBox(),
-            'artifact': QSpinBox(),
-            'planeswalker': QSpinBox(),
-            'land': QSpinBox()
-        }
-        for card_type, widget in self.card_type_weights.items():
-            widget.setValue(40 if card_type == 'creature' else (15 if card_type in ['instant', 'sorcery'] else 10))
-            layout.addRow(f'{card_type.capitalize()} Weight:', widget)
+        # SD3 specific settings
+        self.sd3_iterations_label = QLabel('Iterations:')
+        self.sd3_iterations = QSpinBox()
+        self.sd3_iterations.setValue(30)
+        self.sd3_iterations.setMinimum(0)
+        self.sd3_iterations.setMaximum(50)
 
-        # Artifact Weights
-        self.vehicle_weight = QSpinBox()
-        self.vehicle_weight.setValue(10)
-        layout.addRow('Vehicle Weight:', self.vehicle_weight)
+        self.sd3_setting_group = [self.sd3_iterations, self.sd3_iterations_label]
+        for widget in self.sd3_setting_group:
+            widget.setVisible(False)
 
-        self.equipment_weight = QSpinBox()
-        self.equipment_weight.setValue(10)
-        layout.addRow('Equipment Weight:', self.equipment_weight)
+        # DALL-E specific settings
+        self.dalle_wide = QComboBox()
+        self.dalle_wide.addItems(["1024x1024", "1792x1024"])
+        self.dalle_hd = QCheckBox('HD')
 
-        self.other_weight = QSpinBox()
-        self.other_weight.setValue(80)
-        layout.addRow('Other Weight:', self.other_weight)
+        # Additional prompting for DALL-E
+        self.dalle_prompt_chars_label = QLabel('Maximum Image Prompt Size (chars):')
+        self.dalle_prompt_chars = QSlider(Qt.Orientation.Horizontal, self)
+        self.dalle_prompt_chars.setValue(800)
+        self.dalle_prompt_chars.setMinimum(400)
+        self.dalle_prompt_chars.setMaximum(4000)
+        self.dalle_prompt_chars.setTickInterval(400)
+        self.dalle_prompt_chars.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.dalle_prompt_chars_value = QLabel('800')
+        self.dalle_prompt_chars.valueChanged.connect(lambda value: self.dalle_prompt_chars_value.setText(str(value)))
 
-        self.override_color_weights = {
-            'colorless': QSpinBox(),
-            'white': QSpinBox(),
-            'blue': QSpinBox(),
-            'black': QSpinBox(),
-            'red': QSpinBox(),
-            'green': QSpinBox(),
-            'multicolor': QSpinBox()
-        }
-        for color, widget in self.override_color_weights.items():
-            widget.setValue(58 if color == 'colorless' else (8 if color in ['white', 'blue', 'black', 'red', 'green'] else 2))
-            layout.addRow(f'{color.capitalize()} Color Weight:', widget)
 
-        # Ability and Synergy Settings
-        self.regenerate_custom_abilities = QCheckBox()
-        self.regenerate_custom_abilities.setChecked(True)
-        layout.addRow('Regenerate Custom Abilities:', self.regenerate_custom_abilities)
+        self.additional_prompting_label = QLabel('Additional Prompting:')
+        self.additional_prompting_setting = QTextEdit()
+        self.additional_prompting_setting.setPlaceholderText('Enter additional prompting...')
+        
+        self.dalle_setting_group = [self.dalle_hd, self.dalle_wide, self.dalle_prompt_chars, self.dalle_prompt_chars_label, self.dalle_prompt_chars_value, self.additional_prompting_label, self.additional_prompting_setting]
+        for widget in self.dalle_setting_group:
+            widget.setVisible(False)
 
-        self.load_abilities = QCheckBox()
-        self.load_abilities.setChecked(True)
-        layout.addRow('Load Abilities:', self.load_abilities)
+        # Internet Search specific settings
 
-        self.ability_file = QPushButton('Select Ability File')
-        self.ability_file.clicked.connect(self.select_ability_file)
-        self.ability_file_path = QLabel('abilities.json')
-        layout.addRow('Ability File:', self.ability_file_path)
+        self.internet_search_group = []
+        for widget in self.internet_search_group:
+            widget.setVisible(False)
 
-        self.enable_synergy = QCheckBox()
-        self.enable_synergy.setChecked(False)
-        layout.addRow('Enable Synergy:', self.enable_synergy)
+        
 
-    def select_theme_config(self):
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Theme Config", "", "YAML Files (*.yml);;All Files (*)", options=options)
-        if file_path:
-            self.theme_override_config_path.setText(file_path)
+        # Add settings widgets
+        image_gen_layout.addRow(self.sd3_iterations_label, self.sd3_iterations)
+        image_gen_layout.addRow(self.dalle_wide)
+        image_gen_layout.addRow(self.dalle_hd)
 
-    def select_ability_file(self):
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Ability File", "", "JSON Files (*.json);;All Files (*)", options=options)
-        if file_path:
-            self.ability_file_path.setText(file_path)
+        slider_layout = QHBoxLayout()
+        slider_layout.addWidget(self.dalle_prompt_chars)
+        slider_layout.addWidget(self.dalle_prompt_chars_value)
+        slider_widg = QWidget()
+        slider_widg.setLayout(slider_layout)
+
+        image_gen_layout.addRow(self.dalle_prompt_chars_label, slider_widg)
+        image_gen_layout.addRow(self.additional_prompting_label, self.additional_prompting_setting)  # Added settings
+        layout.addWidget(image_gen_group)
+
+    def add_card_templetation_settings(self, layout):
+        card_template_group = QGroupBox("Card Templating")
+        card_template_layout = QFormLayout()
+        card_template_group.setLayout(card_template_layout)
+
+        # Option selector
+        self.card_template_option = QComboBox()
+        self.card_template_option.addItems(['Proxyshop', 'HTML Render'])
+        card_template_layout.addRow('Card Template Option:', self.card_template_option)
+
+        layout.addWidget(card_template_group)
+
+    def update_text_gen_settings(self, index):
+        # Show/hide specific settings and labels based on selected option
+        for widget in self.gpt2_group:
+            widget.setVisible(index == 0)
+        for widget in self.gpt4o_mini_group:
+            widget.setVisible(index == 1)
+
+    def update_image_gen_settings(self, index):
+        # Show/hide specific settings and labels based on selected option
+        for widget in self.sd3_setting_group:
+            widget.setVisible(index == 0)
+        for widget in self.dalle_setting_group:
+            widget.setVisible(index == 1)
+        for widget in self.internet_search_group:
+            widget.setVisible(index == 2)
+
+
 
 class MainWindow(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args,**kwargs)
 
         self.setWindowTitle("Fblthp Foundries Cube Generator")
-        self.setGeometry(100, 100, 600, 800)
+        self.setGeometry(100, 100, 800, 600)
 
         layout = QGridLayout(self)
         self.setLayout(layout)
@@ -190,7 +230,6 @@ class MainWindow(QWidget):
         self.factory = cardFactory.Factory()
     def setup_gen_widget(self):
         self.card_list_layout = QVBoxLayout(self.card_list_widget)
-        self.settings_layout = QVBoxLayout(self.settings_widget)
 
         self.list = QListWidget(self.card_list_widget)
         self.card_list_layout.addWidget(self.list)

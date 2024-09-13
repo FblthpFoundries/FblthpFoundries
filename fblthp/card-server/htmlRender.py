@@ -1,12 +1,8 @@
-import urllib.parse
-import urllib.request
 import imgkit
 import re
 import base64
 from datetime import datetime
 import os
-import requests, urllib
-from bs4 import BeautifulSoup
 
 to_absolute = 'C:/Users/oweng/magic/fblthp/card-'
 

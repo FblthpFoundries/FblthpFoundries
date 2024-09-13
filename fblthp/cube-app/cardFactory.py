@@ -11,7 +11,7 @@ class Factory():
         self.model.to(self.device)
         self.cards = []
 
-    def __cardGen(self):
+    def __cardGen(self, updateFunc = None):
         text = '<tl>'
         encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
         output = self.model.generate(
@@ -28,16 +28,17 @@ class Factory():
             if not self.is_valid_card(card):
                 pass
             self.cards.append(Card(card))
+            if updateFunc:
+                updateFunc(len(self.cards))
 
-    def gen_cube(self, num):
+    def gen_cube(self, num, update):
 
         while len(self.cards) < num:
-            self.__cardGen()
+            self.__cardGen(lambda n : update(n/num))
 
         toReturn = self.cards[:num]
         self.cards = self.cards[num:]
 
-        print(len(self.cards))
 
         return toReturn
         

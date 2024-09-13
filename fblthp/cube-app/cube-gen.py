@@ -41,8 +41,7 @@ class MainWindow(QWidget):
         self.edit_button = QPushButton('Edit')
         self.edit_button.clicked.connect(self.edit)
 
-        self.disableButtons = False
-
+        self.buttons=[self.gen_button, self.reroll_button, self.edit_button]
 
         layout.addWidget(self.gen_button, 0, 1)
         layout.addWidget(self.reroll_button, 1, 1)
@@ -52,11 +51,7 @@ class MainWindow(QWidget):
         self.factory = cardFactory.Factory()
 
     def gen(self):
-
-        if not self.gen_button.isEnabled(): #WHY NO WORK??????
-            return
-
-        self.gen_button.setDisabled(True)
+        self.disableButtons(True)
         num, ok = QInputDialog.getInt(self, 'Number to Generate', 'Enter number of cards to generate:', 10, 1, 500, 1)
 
         if ok:
@@ -72,13 +67,21 @@ class MainWindow(QWidget):
             self.loading.show()
             self.worker.start()
 
-        self.gen_button.setDisabled(False)
+        else:
+            self.disableButtons(False)
+
+
+    def disableButtons(self, yes):
+        for button in self.buttons:
+            button.setDisabled(yes)
+
 
     def updateProgress(self, value):
         self.progress.setValue(value)
 
     def onGenerationFinished(self, cards):
         self.loading.done(0)
+        self.disableButtons(False)
         for card in cards:
             self.list.addItem(card)
 

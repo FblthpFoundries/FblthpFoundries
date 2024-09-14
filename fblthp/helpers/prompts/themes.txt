@@ -1,0 +1,11 @@
+You will be creating a unique card within the world of Magic: The Gathering. 
+Start with the following characteristics of the card:
+
+    - Color Identity: {color_identity}
+    - Card Type: {card_type}
+    - Mana Cost: {mana_cost}
+    - Rarity: {rarity}
+    {subbie}
+
+Generate 20 themes for the card based on these characteristics. These go in the 'themes' field.
+Return a JSON dictionary with a 'themes' field, with a list of string values.

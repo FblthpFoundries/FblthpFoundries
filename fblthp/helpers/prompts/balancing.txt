@@ -1,0 +1,7 @@
+{initial_card}
+
+This is JSON for a generated Magic: the gathering card. 
+I would like you to read the card, and adjust its abilities to follow the rules of the game.
+Return a JSON dictionary with the adjusted 'oracle_text' field, with a string value.
+Also include a field 'adjustment' in the dictionary for an explanation of the changes you made and why. 
+This JSON output is all I want.

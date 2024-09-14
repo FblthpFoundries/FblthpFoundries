@@ -1,0 +1,20 @@
+Create a unique card within the world of Magic: The Gathering, ensuring it follows the game's official rules. 
+Start with the following characteristics of the card:
+    - Name: {name}
+    - Theme: {theme}
+    - Color Identity: {color_identity}
+    - Mana Cost: {mana_cost}
+    - Card Type: {card_type}
+    - Rarity: {rarity}
+        
+When designing the card, follow these rules:
+
+    - Place separate abilities on new lines.
+    - Cards should have flavor text.
+    - Format mana symbols with curly braces.
+    - {subbie}
+    {additional_specs}
+    
+Return a JSON dictionary with 'type_line', 'name', 'mana_cost', 'rarity', 'oracle_text', 'flavor_text', 'power', 'toughness', and 'loyalty' fields, with string values. Each of these values must be present in the dictionary.
+If a field is not applicable, set it to an empty string.
+Generate only one card per API call.

@@ -1,0 +1,19 @@
+Given the following Magic: The Gathering card text, generate an image prompt for DALL-E to create an image that captures the essence of the card:
+
+Type Line: {type_line}
+Name: {name}
+Mana Cost: {mana_cost}
+Oracle Text: {oracle_text}
+Power: {power}
+Theme: {theme}
+Toughness: {toughness}
+Loyalty: {loyalty}
+Flavor Text: {flavor_text}
+Rarity: {rarity}
+
+Please provide a detailed description for an image that captures the essence of this card. Avoid text in the image. 
+Simply explain what to generate. Do not mention Magic: The Gathering.
+{code_adds}
+{additional_prompt}
+Don't use the words "token", "permanent", "counter", or "card" in the prompt. Instead suggest specific creatures, humans, or objects in their place. Avoid urban environments, unless they are somewhat fantasy in nature.
+Return only JSON as output with the returned prompt stored in a "prompt" field. The prompt should be summarized in {max_chars} characters.

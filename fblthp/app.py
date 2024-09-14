@@ -13,7 +13,9 @@ from helpers.foundry import ChatGPTCardGenerator, LocalCardGenerator
 from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, GoogleImageGenerator
 from helpers.magicCard import Card
 from helpers import genMSE
-
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
+IMAGE_DIR = BASE_DIR / "images"
 class WorkerThread(QThread):
     progressUpdated = pyqtSignal(int)
     finished = pyqtSignal(list)
@@ -208,13 +210,21 @@ class SettingsWidget(QWidget):
 class ImageGenWidget(QWidget):
     def __init__(self, card_list_widget, parent=None):
         super().__init__(parent)
+
+        self.image_generator = GoogleImageGenerator()
+
         self.card_list_widget = card_list_widget
         self.setLayout(QVBoxLayout())
-
+        buttonbar = QWidget()
+        buttonbar.setLayout(QHBoxLayout())
+        self.load_button = QPushButton('Load Current Cards')
+        self.load_button.clicked.connect(self.load_cards)
+        buttonbar.layout().addWidget(self.load_button)
         # Button to generate images
         self.generate_button = QPushButton('Generate Images')
         self.generate_button.clicked.connect(self.generate_images)
-        self.layout().addWidget(self.generate_button)
+        buttonbar.layout().addWidget(self.generate_button)
+        self.layout().addWidget(buttonbar)
 
         # Container for image gallery
         self.image_container = QWidget()
@@ -226,8 +236,8 @@ class ImageGenWidget(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.image_container)
         self.layout().addWidget(self.scroll_area)
-
-    def generate_images(self):
+    def load_cards(self):
+        cards = self.card_list_widget.get_cards()
         # Clear the current image gallery
         for i in reversed(range(self.image_layout.count())):
             widget = self.image_layout.itemAt(i).widget()
@@ -235,20 +245,22 @@ class ImageGenWidget(QWidget):
                 widget.deleteLater()
         
         # Get card titles from the list widget
-        titles = [self.card_list_widget.item(i).text() for i in range(self.card_list_widget.count())]
-        num_images = len(titles)
 
         # Example image generation
-        for i in range(num_images):
-            title = titles[i]
+        for i, card in enumerate(cards):
+
+            title = card.name
             image_label = QLabel()
-            title_label = QLabel(self.truncate_text(title, 15))  # Truncate text to fit better
+            title_label = QLabel(title)
             title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             title_label.setFixedHeight(30)  # Fixed height for title
             
             # Placeholder image generation
-            image = QImage(300, 300, QImage.Format.Format_RGB888)  # Larger placeholder image
-            image.fill(Qt.GlobalColor.blue)  # Fill with blue color as placeholder
+            if card.image_path:
+                image = QImage(card.image_path)
+            else:
+                image = QImage(str(IMAGE_DIR / "no-image-available.png"))
             pixmap = QPixmap.fromImage(image)
             image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
             
@@ -262,7 +274,8 @@ class ImageGenWidget(QWidget):
             
             # Add to grid layout (2 images wide)
             self.image_layout.addWidget(vertical_widget, i // 2, i % 2)
-
+    def generate_images(self):
+        pass
     def load_image(self, file_path):
         if os.path.exists(file_path):
             image = QImage(file_path)
@@ -332,46 +345,14 @@ class FileWidget(QWidget):
     def load(self):
         pass
 
-
-class MainWindow(QWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args,**kwargs)
-
-        self.setWindowTitle("Fblthp Foundries Cube Generator")
-        self.setGeometry(100, 100, 800, 600)
-
-        layout = QGridLayout(self)
-        self.setLayout(layout)
-
-        self.tab_widget = QTabWidget(self)
-        layout.addWidget(self.tab_widget, 0, 0)
-
-        # Create and set up widgets for the tabs
-        self.card_list_widget = QWidget()
-
-        # Layouts for tab widgets
-        self.setup_gen_widget()
-
-
-        self.image_gen_widget = ImageGenWidget(self.list)
-        self.rendering_widget = QWidget()
-        self.settings_widget = SettingsWidget()
-        self.file_widget = FileWidget()
-        self.file_widget.saveSignal.connect(self.toXML)
-        self.file_widget.saveSignal.connect(self.toMSE)
-
-        self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
-        self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')
-        self.tab_widget.addTab(self.rendering_widget, 'Card Rendering')
-        self.tab_widget.addTab(self.settings_widget, 'Settings')
-        self.tab_widget.addTab(self.file_widget, 'File')
-        self.show()
+class CardListWidget(QWidget):
+    def __init__(self, supreme_ruler=None):
+        super().__init__()
+        self.supreme_ruler = supreme_ruler
         self.card_generator = LocalCardGenerator()
-        self.image_generator = GoogleImageGenerator()
-    def setup_gen_widget(self):
-        self.card_list_layout = QVBoxLayout(self.card_list_widget)
+        self.card_list_layout = QVBoxLayout(self)
 
-        self.list = QListWidget(self.card_list_widget)
+        self.list = QListWidget(self)
         self.card_list_layout.addWidget(self.list)
 
         self.gen_button = QPushButton('Gen')
@@ -391,7 +372,6 @@ class MainWindow(QWidget):
         button_layout.addWidget(self.edit_button)
 
         self.card_list_layout.addLayout(button_layout)
-
     def gen(self):
         self.disableButtons(True)
         num, ok = QInputDialog.getInt(self, 'Number to Generate', 'Enter number of cards to generate:', 10, 1, 500, 1)
@@ -413,20 +393,20 @@ class MainWindow(QWidget):
         else:
             self.disableButtons(False)
 
-
-    def disableButtons(self, yes):
-        for button in self.buttons:
-            button.setDisabled(yes)
-
-
     def updateProgress(self, value):
         self.progress.setValue(value)
-
     def onGenerationFinished(self, cards):
         self.loading.done(0)
         self.disableButtons(False)
         for card in cards:
             self.list.addItem(Card(card))
+    def get_cards(self):
+        cards = []
+        for i in range(self.list.count()):
+            cards.append(self.list.item(i))
+        return cards
+
+        
 
     def reroll(self):
         curr_row = self.list.currentRow()
@@ -436,10 +416,55 @@ class MainWindow(QWidget):
             del oldCard
             self.list.insertItem(curr_row, Card(newCard))
             self.list.setCurrentRow(curr_row)
-
     def edit(self):
         pass
 
+    def disableButtons(self, yes):
+        for button in self.buttons:
+            button.setDisabled(yes)
+
+
+class MainWindow(QWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args,**kwargs)
+
+        self.setWindowTitle("Fblthp Foundries Cube Generator")
+        self.setGeometry(100, 100, 800, 600)
+
+        layout = QGridLayout(self)
+        self.setLayout(layout)
+
+        self.tab_widget = QTabWidget(self)
+        layout.addWidget(self.tab_widget, 0, 0)
+
+        # Create and set up widgets for the tabs
+        self.card_list_widget = CardListWidget(self)
+
+        self.cards = []
+
+
+        # Layouts for tab widgets
+
+
+        self.image_gen_widget = ImageGenWidget(self.card_list_widget)
+        self.rendering_widget = QWidget()
+        self.settings_widget = SettingsWidget()
+        self.file_widget = FileWidget()
+        self.file_widget.saveSignal.connect(self.toXML)
+        self.file_widget.saveSignal.connect(self.toMSE)
+
+        self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
+        self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')
+        self.tab_widget.addTab(self.rendering_widget, 'Card Rendering')
+        self.tab_widget.addTab(self.settings_widget, 'Settings')
+        self.tab_widget.addTab(self.file_widget, 'File')
+        self.show()
+
+
+        
+
+    
+    
     def createSetXML(self, root):
         setTag = root.createElement('set')
 
@@ -464,7 +489,6 @@ class MainWindow(QWidget):
         date.appendChild(text)
 
         return setTag
-
 
     def cardXML(self, card, root):
         cardTag = root.createElement('card')
@@ -517,7 +541,6 @@ class MainWindow(QWidget):
 
         with open(fileName + '.xml', 'w') as f:
             f.write(xml_str)
-
 
     def toMSE(self, fileName):
         cards = [self.list.item(i) for i in range(self.list.count())]

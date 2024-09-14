@@ -5,12 +5,15 @@ import requests
 import re
 import torch
 import numpy as np
+from PIL import Image
+import os
 from openai import OpenAI, BadRequestError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .distribution import seed_card
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = BASE_DIR / "helpers" / "prompts"
+IMAGE_DIR = BASE_DIR / "images"
 
 # CARD GENERATORS
 
@@ -307,7 +310,7 @@ class LocalCardGenerator(BaseCardGenerator):
 class BaseImageGenerator():
     def __init__(self):
         pass
-    def generate_images(self, cards):
+    def gen_image(self, card):
         pass
 
 class DALLEImageGenerator(BaseImageGenerator):
@@ -436,7 +439,47 @@ class GoogleImageGenerator(BaseImageGenerator):
     def generate_images(self, cards):
         pass
 
+class TestImageGenerator(BaseImageGenerator):
+    def __init__(self):
+        super().__init__()
+    def gen_image(self, card):
+        # Define the fixed size of the image
+        width, height = 800, 600
 
+        # Define the gradient colors (Red to Blue)
+        color1 = (255, 0, 0)  # Red
+        color2 = (0, 0, 255)  # Blue
+
+        # Create a new blank image (RGB mode)
+        image = Image.new("RGB", (width, height))
+
+        # Get pixel map
+        pixels = image.load()
+
+        # Generate the gradient
+        for x in range(width):
+            for y in range(height):
+                # Calculate the interpolation factor (between 0 and 1)
+                factor = x / width
+
+                # Interpolate the color components (R, G, B)
+                r = int(color1[0] * (1 - factor) + color2[0] * factor)
+                g = int(color1[1] * (1 - factor) + color2[1] * factor)
+                b = int(color1[2] * (1 - factor) + color2[2] * factor)
+
+                # Set the pixel color
+                pixels[x, y] = (r, g, b)
+
+        os.mkdir(IMAGE_DIR)
+
+        # Define the full path to save the image
+        image_path = os.path.join(IMAGE_DIR, "gradient.png")
+
+        # Save the image
+        image.save(image_path)
+
+        # Return the path to the saved image
+        return image_path
 if __name__ == "__main__":
     import cv2
     cardgenerator = ChatGPTCardGenerator()

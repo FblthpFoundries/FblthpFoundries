@@ -47,11 +47,12 @@ def createMSE(name, cards):
     mse = preamble
     for card in cards:
         types = card.type.split("-")
-        oracle = card.oracle if not '\n' in card.oracle else f'\n\t\t{card.oracle.replace('\n', '\n\t\t')}'
+        angry = card.oracle.replace('\n', '\n\t\t')
+        oracle = card.oracle if not '\n' in card.oracle else f"\n\t\t{angry}"
         flavor = card.flavor
         text = 'card:\n'
         text += f'\tname: {card.name}\n'
-        text += f'\trule_text: {oracle.replace('} {', '').replace('{','').replace('}', '')}\n'
+        text += f'\trule_text: {oracle.replace("} {", "").replace("{","").replace("}", "")}\n'
         text += f'\tsuper_type: {types[0]}\n'
         if len(types) > 1:
             text += f'\tsub_type: {types[1]}\n'
@@ -65,7 +66,7 @@ def createMSE(name, cards):
             print('flavortown')
             text += f'\tflavor_text: {flavor}\n'
         if card.mc:
-            text += f'\tcasting_cost: {card.mc.replace('} {', '').replace('{','').replace('}', '')}\n'
+            text += f'\tcasting_cost: {card.mc.replace("} {", "").replace("{","").replace("}", "")}\n'
 
         mse += text[:-1] + fluff.replace("DATE", date)
 

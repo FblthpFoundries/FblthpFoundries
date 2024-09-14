@@ -5,9 +5,8 @@ import requests
 import re
 import torch
 import numpy as np
-
 from openai import OpenAI, BadRequestError
-from distribution import seed_card
+from .distribution import seed_card
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = BASE_DIR / "helpers" / "prompts"
@@ -17,18 +16,22 @@ PROMPTS_DIR = BASE_DIR / "helpers" / "prompts"
 class BaseCardGenerator():
     def __init__(self):
         pass
-    def create_cards(self, number):
+    def create_cards(self, number, update_function=None):
         '''
         Creates and returns a list of {number} cards in dictionary form
         '''
+        pass
+    def reroll():
         pass
     
 class ChatGPTCardGenerator(BaseCardGenerator):
     def __init__(self, model="gpt-4o-mini"):
         super().__init__()
+        from .constants import API_KEY
+        openai.api_key = API_KEY
         self.model = model
     
-    def create_cards(self, number):
+    def create_cards(self, number, update_function=None):
         cards = []
         i = 0
         while i < number:
@@ -36,12 +39,18 @@ class ChatGPTCardGenerator(BaseCardGenerator):
             if success:
                 cards.append(card)
                 i += 1
+                if update_function:
+                    update_function(i/number)
         return cards
-
+    def reroll(self):
+        success = False
+        while not success:
+            success, card = self.generate_card_gpt()
+        return card
+        
     
     def generate_card_gpt(self):
-        from constants import API_KEY
-        openai.api_key = API_KEY
+        
 
         card_type, colors, mana_cost, rarity = seed_card()
 
@@ -115,8 +124,8 @@ class ChatGPTCardGenerator(BaseCardGenerator):
         card['oracle_text'] = new_card['oracle_text']
         card['adjustment'] = new_card['adjustment']
         card['theme'] = theme
-        card['themes'] = themes
-        card['names'] = names
+        #card['themes'] = themes
+        #card['names'] = names
         card['initial-card'] = initial_card
         card['chatgpt-prompt'] = card_prompt
 
@@ -169,59 +178,75 @@ class ChatGPTCardGenerator(BaseCardGenerator):
         return True, json.loads(resp)
 
 class LocalCardGenerator(BaseCardGenerator):
-    def __init__(self, model_path):
+    def __init__(self):
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from .secret_tokens import hugging_face_token
         super().__init__()
-        self.model_path = model_path
-    def create_cards(self, number):
-        pass
-    def generate_text_local(self, model_path, seed=None, text_start="<tl>", max_length=400):
-        """
-        Generates text locally using a pre-trained model.
-        Args:
-            model_path (str): The path to the pre-trained model.
-            seed (int, optional): The random seed for text generation. Defaults to None.
-            text_start (str, optional): The starting text for generation. Defaults to "<tl>".
-            max_length (int, optional): The maximum length of the generated text. Defaults to 400.
-        Returns:
-            tuple: A tuple containing a boolean indicating success or failure of text generation, and the parsed generated text.
-        """
+        self.tokenizer = AutoTokenizer.from_pretrained('gpt2')
+        self.model = AutoModelForCausalLM.from_pretrained('FblthpAI/magic_model', token = hugging_face_token())
+        self.device = 'cuda'
+        self.model.to(self.device)
+        self.cards = []
+        self.batchSize = 10
+    def create_cards(self, number, updateFunc = None):
+        #fills up card queue untill it has enough to serve request
 
-        from transformers import set_seed
-        from gpt import gen
-        if seed:
-            set_seed(seed)
+        while len(self.cards) < number:
+            self._generate(lambda n : updateFunc(n/number))
 
-        # Generate card
-        try:
-            output = gen(
-                text_start=text_start,
-                max_length=max_length,
-                model_path=model_path
-            )
-            parsed = self.parse_card_data(output.split("<eos>")[0])[0]
-            parsed['rarity'] = random.choice(["Common", "Uncommon", "Rare", "Mythic Rare"])  # TODO: fix
-            return True, parsed
-        except Exception as e:
-            self.logger.error(f"Failed to generate text locally: {e}")
-            return False, None
-    def parse_local_card(input_text):
-        """
-        Parses the input text and extracts card data.
-        To be used on output coming from the GPT-2 model.
-        Args:
-            input_text (str): The input text containing card data.
-        Returns:
-            list: A list of dictionaries, where each dictionary represents a card and contains the following keys:
-                - 'type_line': The type line of the card.
-                - 'name': The name of the card.
-                - 'mana_cost': The mana cost of the card.
-                - 'oracle_text': The oracle text of the card.
-                - 'power': The power of the card.
-                - 'toughness': The toughness of the card.
-                - 'loyalty': The loyalty of the card.
-                - 'flavor_text': The flavor text of the card.
-        """
+        toReturn = self.cards[:number]
+        self.cards = self.cards[number:]
+
+        return toReturn
+    
+    def reroll(self):
+        if len(self.cards) > 0:
+            return self.cards.pop()
+
+        self._generate()        
+
+        return self.cards.pop()
+
+    def _generate(self, updateFunc = None):
+        text = ['<tl>'] * self.batchSize
+        encoded_input = self.tokenizer(text, return_tensors='pt').to(self.device)
+        output = self.model.generate(
+            **encoded_input,
+            do_sample=True,
+            temperature = 0.9,
+            max_length =400,
+        )
+
+        cardOutput = self.tokenizer.batch_decode(output)
+        cardTokens = ''
+        #collect all but last card from each batch
+        #last card often is cut off by max_length
+        for batch in cardOutput:
+            for card in batch.split('<eos>')[:-1]:
+                cardTokens += card.replace('\u2212', '-').replace('\u2014', '-').replace('\u2022', '')
+
+        cardTokens = self._parse_card_data(cardTokens)
+
+        print(len(cardTokens))
+
+        for card in cardTokens:
+            if not self._is_valid_card(card):
+                pass
+            self.cards.append(card)
+            if updateFunc:
+                updateFunc(len(self.cards))
+    def _is_valid_card(self,card):
+        if not 'name' in card:
+            return False
+        if not 'oracle_text' in card:
+            return False
+        if not 'type_line' in card:
+            return False
+        return True
+    
+    def _parse_card_data(self, input_text):
         cards = []
+        
         # Define patterns for each part of the card
         card_pattern = r'<tl>(.*?)<\\tl>'
         name_pattern = r'<name>(.*?)<\\name>'
@@ -231,39 +256,43 @@ class LocalCardGenerator(BaseCardGenerator):
         toughness_pattern = r'<toughness>(.*?)<\\toughness>'
         loyalty_pattern = r'<loyalty>(.*?)<\\loyalty>'
         ft_pattern = r'<ft>(.*?)<\\ft>'
+        
         # Split the input into sections for each card
         card_matches = re.findall(r'<tl>.*?(?=<tl>|$)', input_text, re.DOTALL)
-
+        
         for card_match in card_matches:
             card = {}
+            
             # Extract each component using the patterns
             card['type_line'] = re.search(card_pattern, card_match).group(1).strip()
-
+            
             name = re.search(name_pattern, card_match)
             card['name'] = name.group(1).strip() if name else None
-
+            
             mc = re.search(mc_pattern, card_match)
             card['mana_cost'] = mc.group(1).strip() if mc else None
-
+            
             ot = re.search(ot_pattern, card_match)
             card['oracle_text'] = re.sub(r'<nl>', '\n', ot.group(1).strip()) if ot else None
+            if not card['oracle_text'] :
+                continue
             card['oracle_text'] = card['oracle_text'].replace('<br>', '\n')
             card['oracle_text'] = card['oracle_text'].replace('~', card['name'])
-
+            
             power = re.search(power_pattern, card_match)
             card['power'] = power.group(1).strip() if power else None
-
+            
             toughness = re.search(toughness_pattern, card_match)
             card['toughness'] = toughness.group(1).strip() if toughness else None
-
+            
             loyalty = re.search(loyalty_pattern, card_match)
             card['loyalty'] = loyalty.group(1).strip() if loyalty else None
-
+            
             ft = re.search(ft_pattern, card_match)
             card['flavor_text'] = re.sub(r'<nl>', '\n', ft.group(1).strip()) if ft else None
-
+            
             cards.append(card)
-
+        
         return cards
 
 
@@ -279,7 +308,7 @@ class BaseImageGenerator():
 class DALLEImageGenerator(BaseImageGenerator):
     def __init__(self, quality="standard", size="1024x1024", additional_prompt="", text_model="gpt-4o-mini"):
         super().__init__()
-        from constants import API_KEY
+        from .constants import API_KEY
         openai.api_key = API_KEY
         self.quality = quality
         self.size = size

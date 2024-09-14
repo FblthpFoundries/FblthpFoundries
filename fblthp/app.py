@@ -9,22 +9,23 @@ from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
 from xml.dom import minidom
 import sys, os
-from helpers import cardFactory
-
+from helpers.foundry import ChatGPTCardGenerator, LocalCardGenerator
+from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, GoogleImageGenerator
+from helpers.magicCard import Card
 class WorkerThread(QThread):
     progressUpdated = pyqtSignal(int)
     finished = pyqtSignal(list)
 
-    def __init__(self, factory, num, parent=None):
+    def __init__(self, card_generator, num, parent=None):
         super().__init__(parent)
-        self.factory = factory
+        self.card_generator = card_generator
         self.num = num
 
     def run(self):
         def updateProgress(num):
             self.progressUpdated.emit(int(num * 100))
 
-        cards = self.factory.gen_cube(self.num, updateProgress)
+        cards = self.card_generator.create_cards(self.num, updateProgress)
         self.finished.emit(cards)
 
 class SettingsWidget(QWidget):
@@ -361,10 +362,9 @@ class MainWindow(QWidget):
         self.tab_widget.addTab(self.rendering_widget, 'Card Rendering')
         self.tab_widget.addTab(self.settings_widget, 'Settings')
         self.tab_widget.addTab(self.file_widget, 'File')
-
         self.show()
-
-        self.factory = cardFactory.Factory()
+        self.card_generator = LocalCardGenerator()
+        self.image_generator = DALLEImageGenerator()
     def setup_gen_widget(self):
         self.card_list_layout = QVBoxLayout(self.card_list_widget)
 
@@ -400,7 +400,7 @@ class MainWindow(QWidget):
             self.progress = QProgressBar(self.loading)
             self.progress.setGeometry(50, 50, 250, 30)
 
-            self.worker = WorkerThread(self.factory, num)
+            self.worker = WorkerThread(self.card_generator, num)
             self.worker.progressUpdated.connect(self.updateProgress)
             self.worker.finished.connect(self.onGenerationFinished)
             self.loading.show()
@@ -422,12 +422,12 @@ class MainWindow(QWidget):
         self.loading.done(0)
         self.disableButtons(False)
         for card in cards:
-            self.list.addItem(card)
+            self.list.addItem(Card(card))
 
     def reroll(self):
         curr_row = self.list.currentRow()
         if curr_row >= 0:
-            newCard = self.factory.reroll()
+            newCard = self.card_generator.reroll()
             oldCard = self.list.takeItem(curr_row)
             del oldCard
             self.list.insertItem(curr_row, newCard)

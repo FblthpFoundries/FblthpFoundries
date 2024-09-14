@@ -12,6 +12,8 @@ import sys, os
 from helpers.foundry import ChatGPTCardGenerator, LocalCardGenerator
 from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, GoogleImageGenerator
 from helpers.magicCard import Card
+from helpers import genMSE
+
 class WorkerThread(QThread):
     progressUpdated = pyqtSignal(int)
     finished = pyqtSignal(list)
@@ -325,7 +327,7 @@ class FileWidget(QWidget):
 
 
     def save(self):
-        self.saveSignal.emit('test.xml')
+        self.saveSignal.emit('saveTest')
 
     def load(self):
         pass
@@ -356,6 +358,7 @@ class MainWindow(QWidget):
         self.settings_widget = SettingsWidget()
         self.file_widget = FileWidget()
         self.file_widget.saveSignal.connect(self.toXML)
+        self.file_widget.saveSignal.connect(self.toMSE)
 
         self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
         self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')
@@ -363,8 +366,8 @@ class MainWindow(QWidget):
         self.tab_widget.addTab(self.settings_widget, 'Settings')
         self.tab_widget.addTab(self.file_widget, 'File')
         self.show()
-        self.card_generator = ChatGPTCardGenerator()
-        self.image_generator = DALLEImageGenerator()
+        self.card_generator = LocalCardGenerator()
+        self.image_generator = GoogleImageGenerator()
     def setup_gen_widget(self):
         self.card_list_layout = QVBoxLayout(self.card_list_widget)
 
@@ -512,8 +515,13 @@ class MainWindow(QWidget):
 
         xml_str = root.toprettyxml(encoding = 'utf-8').decode()
 
-        with open(fileName, 'w') as f:
+        with open(fileName + '.xml', 'w') as f:
             f.write(xml_str)
+
+
+    def toMSE(self, fileName):
+        cards = [self.list.item(i) for i in range(self.list.count())]
+        genMSE.createMSE(fileName, cards)
 
 
 if __name__ == '__main__':

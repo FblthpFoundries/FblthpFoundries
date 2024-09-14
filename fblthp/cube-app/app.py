@@ -9,7 +9,7 @@ from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
 from xml.dom import minidom
 import sys
-import cardFactory
+import cardFactory, genMSE
 
 class WorkerThread(QThread):
     progressUpdated = pyqtSignal(int)
@@ -326,7 +326,7 @@ class FileWidget(QWidget):
 
 
     def save(self):
-        self.saveSignal.emit('test.xml')
+        self.saveSignal.emit('saveTest')
 
     def load(self):
         pass
@@ -357,6 +357,7 @@ class MainWindow(QWidget):
         self.settings_widget = SettingsWidget()
         self.file_widget = FileWidget()
         self.file_widget.saveSignal.connect(self.toXML)
+        self.file_widget.saveSignal.connect(self.toMSE)
 
         self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
         self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')
@@ -436,6 +437,11 @@ class MainWindow(QWidget):
 
     def edit(self):
         pass
+
+    def toMSE(self, fileName):
+        cards = [self.list.item(i) for i in range(self.list.count())]
+        genMSE.createMSE(fileName, cards)
+
 
     def createSetXML(self, root):
         setTag = root.createElement('set')
@@ -533,7 +539,7 @@ class MainWindow(QWidget):
 
         xml_str = root.toprettyxml(encoding = 'utf-8').decode()
 
-        with open(fileName, 'w') as f:
+        with open(fileName + '.xml', 'w') as f:
             f.write(xml_str)
 
 

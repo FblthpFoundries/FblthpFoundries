@@ -1,8 +1,10 @@
-from magicCard import Card
+from .magicCard import Card
 import os
 from zipfile import ZipFile
 from datetime import datetime
-
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+PROMPTS_DIR = BASE_DIR 
 
 preamble = """
 mse_version: 2.0.2
@@ -69,9 +71,9 @@ def createMSE(name, cards):
 
     mse += end
 
-    with open('set', 'w') as f:
+    with open(f'{BASE_DIR}/helpers/toZip/set', 'w') as f:
         f.write(mse)
 
-    with ZipFile(name + '.mse-set', 'w') as zip:
-        zip.write('set')
-        zip.write('fblthpAI.mse-symbol')
+    with ZipFile(f'{BASE_DIR}/{name}.mse-set', 'w') as zip:
+        zip.write(f'{BASE_DIR}/helpers/toZip/set')
+        zip.write(f'{BASE_DIR}/helpers/toZip/fblthpAI.mse-symbol')

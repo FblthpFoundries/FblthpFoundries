@@ -363,7 +363,7 @@ class MainWindow(QWidget):
         self.tab_widget.addTab(self.settings_widget, 'Settings')
         self.tab_widget.addTab(self.file_widget, 'File')
         self.show()
-        self.card_generator = LocalCardGenerator()
+        self.card_generator = ChatGPTCardGenerator()
         self.image_generator = DALLEImageGenerator()
     def setup_gen_widget(self):
         self.card_list_layout = QVBoxLayout(self.card_list_widget)
@@ -430,7 +430,8 @@ class MainWindow(QWidget):
             newCard = self.card_generator.reroll()
             oldCard = self.list.takeItem(curr_row)
             del oldCard
-            self.list.insertItem(curr_row, newCard)
+            self.list.insertItem(curr_row, Card(newCard))
+            self.list.setCurrentRow(curr_row)
 
     def edit(self):
         pass

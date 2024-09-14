@@ -6,6 +6,7 @@ import re
 import torch
 import numpy as np
 from openai import OpenAI, BadRequestError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from .distribution import seed_card
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,14 +35,18 @@ class ChatGPTCardGenerator(BaseCardGenerator):
     def create_cards(self, number, update_function=None):
         cards = []
         i = 0
-        while i < number:
-            success, card = self.generate_card_gpt()
-            if success:
-                cards.append(card)
-                i += 1
-                if update_function:
-                    update_function(i/number)
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self.generate_card_gpt) for _ in range(number)]
+
+            for future in as_completed(futures):
+                success, card = future.result()
+                if success:
+                    cards.append(card)
+                    i += 1
+                    if update_function:
+                        update_function(i/number)
         return cards
+
     def reroll(self):
         success = False
         while not success:
@@ -159,7 +164,7 @@ class ChatGPTCardGenerator(BaseCardGenerator):
 
     # Helper function to interact with the GPT model (make sure prompts ask for JSON return)
     def ask_gpt(self, prompt, header="You are an expert in generating Magic: The Gathering cards."):
-        print(f"ME: {prompt}")
+        #print(f"ME: {prompt}")
         
         
         response = openai.chat.completions.create(
@@ -174,7 +179,7 @@ class ChatGPTCardGenerator(BaseCardGenerator):
             resp = resp.split('```')[1]
         if resp[:4] == "json":
             resp = resp[4:]
-        print(f"CHATGPT: {resp}")
+        #print(f"CHATGPT: {resp}")
         return True, json.loads(resp)
 
 class LocalCardGenerator(BaseCardGenerator):
@@ -371,7 +376,7 @@ class DALLEImageGenerator(BaseImageGenerator):
             return False, None
     # Helper function to interact with the GPT model (make sure prompts ask for JSON return)
     def ask_gpt(self, prompt, header="You are an expert in generating Magic: The Gathering cards."):
-        print(f"ME: {prompt}")
+        #print(f"ME: {prompt}")
         
         
         response = openai.chat.completions.create(
@@ -386,7 +391,7 @@ class DALLEImageGenerator(BaseImageGenerator):
             resp = resp.split('```')[1]
         if resp[:4] == "json":
             resp = resp[4:]
-        print(f"CHATGPT: {resp}")
+        #print(f"CHATGPT: {resp}")
         return True, json.loads(resp)
 
 class SD3ImageGenerator(BaseImageGenerator):
@@ -436,8 +441,8 @@ if __name__ == "__main__":
     import cv2
     cardgenerator = ChatGPTCardGenerator()
     cards = cardgenerator.create_cards(1)
-    print(" PRINTING CARDS!!!!!")
-    [print(c) for c in cards]
+    #print(" PRINTING CARDS!!!!!")
+    #[print(c) for c in cards]
     imagegenerator = DALLEImageGenerator()
     images = imagegenerator.generate_images(cards)
     for img in images:

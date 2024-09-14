@@ -395,7 +395,7 @@ class MainWindow(QWidget):
 
         if ok:
             self.loading = QDialog(self)
-            self.loading.setWindowTitle('Generating')
+            self.loading.setWindowTitle('Generating Cards...')
             self.loading.resize(320, 130)
             self.progress = QProgressBar(self.loading)
             self.progress.setGeometry(50, 50, 250, 30)
@@ -404,6 +404,7 @@ class MainWindow(QWidget):
             self.worker.progressUpdated.connect(self.updateProgress)
             self.worker.finished.connect(self.onGenerationFinished)
             self.loading.show()
+            self.updateProgress(0)
             self.worker.start()
 
         else:

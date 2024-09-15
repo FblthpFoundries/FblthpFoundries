@@ -51,6 +51,7 @@ class ImageGenerationThread(QThread):
             print(f"Error generating image for card {self.card.name}: {e}")
 
 class CardImageWidget(QWidget):
+    regenerate_requested = pyqtSignal(uuid.UUID)
     def __init__(self, card, parent=None):
         super().__init__(parent)
         self.card = card
@@ -104,12 +105,31 @@ class CardImageWidget(QWidget):
         self.stats_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.stats_label.setStyleSheet("color: #E0E0E0;")
 
+        # Add a button to regenerate art
+        self.regenerate_button = QPushButton("Regenerate Art")
+        self.regenerate_button.clicked.connect(self.request_regeneration)  # Connect to the regeneration method
+
+        # Make the button red
+        self.regenerate_button.setStyleSheet("""
+            QPushButton {
+                background-color: maroon;
+                color: white;
+                border: 1px solid #555;
+                padding: 5px;
+            }
+            QPushButton:disabled {
+                background-color: #a0a0a0;
+            }
+        """)
+
+
         # Add everything to the main layout
         self.layout.addLayout(title_layout)
         self.layout.addWidget(self.image_label)
         self.layout.addWidget(self.type_label)
         self.layout.addWidget(self.oracle_text_label)
         self.layout.addWidget(self.stats_label)
+        self.layout.addWidget(self.regenerate_button)
 
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(5)
@@ -179,6 +199,13 @@ class CardImageWidget(QWidget):
         """Ensure that the image resizes with the window."""
         self.update_image()  # Refresh image scaling when the window is resized
         super().resizeEvent(event)
+
+    def request_regeneration(self):
+        self.regenerate_requested.emit(self.uuid)
+        self.card.image_path = None
+        self.generating = True
+        self.regenerate_button.setEnabled(False)
+        self.update_image()
         
 
 class SettingsWidget(QWidget):
@@ -400,6 +427,7 @@ class SettingsWidget(QWidget):
 class ImageGenWidget(QWidget):
     def __init__(self, card_list_widget, parent=None):
         super().__init__(parent)
+        self.threads = []
         settings = QSettings("FblthpFoundries", "CardGenerator")
         self.image_gen_name = settings.value("image_gen/option", "SD3")
         if self.image_gen_name == "Pixabay":
@@ -469,13 +497,14 @@ class ImageGenWidget(QWidget):
     def generate_images(self):
         if not isinstance(self.image_generator, SD3ImageGenerator):
         # Launch separate threads for each card without images using QThread
-            self.threads = []
+            
             for card in self.cards_uuid_dict.values():
                 if not card.image_path:
                     thread = ImageGenerationThread(self.image_generator, card)
                     thread.image_generated.connect(self._update_image)
                     self.widgies[card.uuid].failed = False
                     self.widgies[card.uuid].generating = True
+                    self.widgies[card.uuid].regenerate_button.setEnabled(False)
                     self.widgies[card.uuid].update_image()
                     thread.start()
                     self.threads.append(thread)
@@ -498,8 +527,30 @@ class ImageGenWidget(QWidget):
                     if not img_path:
                         widget.generating = False
                         widget.failed = True
+                    widget.regenerate_button.setEnabled(True)
                     widget.update_image()
                     break
+    
+    def regenerate_art_for_card(self, card_uuid):
+        """Regenerate art for a specific card by its UUID."""
+        card = self.cards_uuid_dict.get(card_uuid)
+        if card:
+            if not isinstance(self.image_generator, SD3ImageGenerator):
+                # Launch a separate thread for this card using QThread
+                thread = ImageGenerationThread(self.image_generator, card)
+                thread.image_generated.connect(self._update_image)
+                self.widgies[card.uuid].failed = False
+                self.widgies[card.uuid].generating = True
+                self.widgies[card.uuid].update_image()
+                thread.start()
+                self.threads.append(thread)
+            else:
+                # Sequential image generation for SD3ImageGenerator
+                try:
+                    card.image_path = self.image_generator.generate_image(card)
+                    self._update_image(card.uuid, card.image_path)
+                except Exception as e:
+                    print(f"Error generating image for card {card}: {e}")
 
     def _reload_cards(self):
         self.widgies = {}
@@ -515,6 +566,8 @@ class ImageGenWidget(QWidget):
             
             widg = CardImageWidget(card)
             self.widgies[card.uuid] = widg
+
+            widg.regenerate_requested.connect(self.regenerate_art_for_card)
             
             # Add to grid layout (2 images wide)
             self.image_layout.addWidget(widg, i // 2, i % 2)

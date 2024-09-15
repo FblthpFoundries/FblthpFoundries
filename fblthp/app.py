@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QSlider, QHBoxLayout, 
 )
 from PyQt6.QtGui import QImage, QPixmap, QMovie, QFont, QPalette, QColor
-from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
+from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize, QSettings
 from xml.dom import minidom
 import sys, os
 import uuid
@@ -54,60 +54,96 @@ class CardImageWidget(QWidget):
     def __init__(self, card, parent=None):
         super().__init__(parent)
         self.card = card
+        self.uuid = card.uuid  # Keep the UUID
         self.generating = False
         self.failed = False
 
-        # Create layout and labels
+        # Main vertical layout
         self.layout = QVBoxLayout(self)
+
+        # Create Title Layout (Name + Mana Cost)
+        title_layout = QHBoxLayout()
+        self.title_label = QLabel(self.card.name)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.title_label.setFont(QFont('Arial', 14, QFont.Weight.Bold))
+        self.title_label.setStyleSheet("color: #E0E0E0; text-decoration: underline;")
+
+        # Mana Cost label (if exists)
+        self.mana_cost_label = QLabel(self.card.mana_cost if self.card.mana_cost else "")
+        self.mana_cost_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.mana_cost_label.setFont(QFont('Arial', 12, QFont.Weight.Normal))
+        self.mana_cost_label.setStyleSheet("color: #E0E0E0;")
+
+        title_layout.addWidget(self.title_label)
+        title_layout.addWidget(self.mana_cost_label)
+
+        # Image Label (Center the image)
         self.image_label = QLabel()
-        self.title_label = QLabel(card.name)
-
-        # Style the title label (centered, clean font, underlined)
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setWordWrap(False)  # No need for word wrapping
-        self.title_label.setFont(QFont('Arial', 14, QFont.Weight.Medium))  # Start with a default font size and weight
-        self.title_label.setStyleSheet("color: #E0E0E0; text-decoration: underline;")  # Underline + light text
-
-        # Initial title size adjustments
-        self.title_label.setFixedHeight(40)  # Fixed height
-        self.title_label.setFixedWidth(320)  # Give more horizontal room
-
-        # Adjust the font size to fit
-        self.adjust_font_size()
-
-        # Style the image label (center the image)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setFixedSize(280, 280)  # A bit more compact
+        self.image_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.image_label.setMinimumSize(150, 150)  # Ensure the image doesn't get too tiny
+        self.image_label.setMaximumSize(1000, 800)  # Max size for the image
 
-        # Add title and image to the layout
-        self.layout.addWidget(self.title_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.addWidget(self.image_label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.layout.setContentsMargins(10, 10, 10, 10)  # Cleaner margins
-        self.layout.setSpacing(5)  # Subtle spacing
+        # Type Line
+        self.type_label = QLabel(self.card.type_line)
+        self.type_label.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+        self.type_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.type_label.setStyleSheet("color: #E0E0E0;")
 
-        # Add modern dark mode styling with reduced rounded corners and underlined title
+        # Oracle Text (Rules text)
+        self.oracle_text_label = QLabel(self.card.oracle_text)
+        self.oracle_text_label.setFont(QFont('Arial', 11))
+        self.oracle_text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.oracle_text_label.setWordWrap(True)
+        self.oracle_text_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.oracle_text_label.setStyleSheet("color: #E0E0E0;")
+
+        # Power / Toughness or Loyalty (if exists)
+        self.stats_label = QLabel(self._get_stats_text())
+        self.stats_label.setFont(QFont('Arial', 12, QFont.Weight.Bold))
+        self.stats_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.stats_label.setStyleSheet("color: #E0E0E0;")
+
+        # Add everything to the main layout
+        self.layout.addLayout(title_layout)
+        self.layout.addWidget(self.image_label)
+        self.layout.addWidget(self.type_label)
+        self.layout.addWidget(self.oracle_text_label)
+        self.layout.addWidget(self.stats_label)
+
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(5)
+
+        # Dark mode styling with reduced rounded corners and a modern look
         self.setStyleSheet("""
             QWidget {
-                background-color: #1e1e1e;  /* Dark background */
-                border: 1px solid #4c4c4c;  /* Subtle border */
-                border-radius: 5px;  /* Much less rounded corners */
+                background-color: #1e1e1e;
+                border: 1px solid #4c4c4c;
+                border-radius: 5px;
                 padding: 10px;
             }
             QLabel {
-                color: #E0E0E0;  /* Lighter text */
+                color: #E0E0E0;
             }
         """)
 
-        # Add drop shadow to the card for depth
+        # Set the background color
         self.setAutoFillBackground(True)
         palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor("#1e1e1e"))  # Dark background
+        palette.setColor(QPalette.ColorRole.Window, QColor("#1e1e1e"))
         self.setPalette(palette)
 
-        self.uuid = card.uuid
-        
-        # If an image exists, load it. Otherwise, start the generation process.
+        # Load or generate image
         self.update_image()
+
+    def _get_stats_text(self):
+        """Returns the formatted Power/Toughness or Loyalty text based on the card."""
+        if self.card.power and self.card.toughness:
+            return f"{self.card.power}/{self.card.toughness}"
+        elif self.card.loyalty:
+            return f"Loyalty: {self.card.loyalty}"
+        return ""
+
     def adjust_font_size(self):
         """Automatically adjusts the font size to fit within the title label."""
         font = self.title_label.font()
@@ -118,30 +154,40 @@ class CardImageWidget(QWidget):
             font_size -= 1
             font.setPointSize(font_size)
             self.title_label.setFont(font)
+
     def update_image(self):
+        """Handles setting the image for the card, including loading/fail states."""
         if self.card.image_path:
             image = QImage(self.card.image_path)
             pixmap = QPixmap.fromImage(image)
-            self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+            self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
         elif self.generating:
-            image = QMovie(str(IMAGE_DIR / "defaults" / "loading.gif"))
-            image.setScaledSize(QSize(150, 150))
-            self.image_label.setMovie(image)
-            self.image_label.resize(QSize(300, 300))
-            image.start()
-            # image = QImage(str(IMAGE_DIR / "defaults" / "loading.gif"))
-            # pixmap = QPixmap.fromImage(image)
-            # self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+            movie = QMovie(str(IMAGE_DIR / "defaults" / "loading.gif"))
+            movie.setScaledSize(QSize(150, 150))
+            self.image_label.setMovie(movie)
+            movie.start()
         elif self.failed:
             image = QImage(str(IMAGE_DIR / "defaults" / "failed.png"))
             pixmap = QPixmap.fromImage(image)
-            self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+            self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
         else:
             image = QImage(str(IMAGE_DIR / "defaults" / "no-image-available.png"))
             pixmap = QPixmap.fromImage(image)
-            self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+            self.image_label.setPixmap(pixmap.scaled(self.image_label.size(), Qt.AspectRatioMode.KeepAspectRatio))
+
+    def resizeEvent(self, event):
+        """Ensure that the image resizes with the window."""
+        self.update_image()  # Refresh image scaling when the window is resized
+        super().resizeEvent(event)
         
+
 class SettingsWidget(QWidget):
+    text_gen_option_changed = pyqtSignal(str)
+    image_gen_option_changed = pyqtSignal(str)
+    dalle_hd_changed = pyqtSignal(bool)
+    dalle_wide_changed = pyqtSignal(str)
+    dalle_additional_prompt_changed = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -162,6 +208,10 @@ class SettingsWidget(QWidget):
         self.add_card_text_generation_settings(container_layout)
         self.add_image_generation_settings(container_layout)
         self.add_card_rendering_settings(container_layout)  # Added section
+
+        # Load saved settings
+        self.load_settings()
+
         self.update_image_gen_settings(0)
         self.update_text_gen_settings(0)
 
@@ -170,6 +220,8 @@ class SettingsWidget(QWidget):
 
         # Add the scroll area to the main layout
         main_layout.addWidget(scroll_area)
+        self.update_text_gen_settings(self.text_gen_option.currentIndex())
+        self.update_image_gen_settings(self.image_gen_option.currentIndex())
 
     def add_general_settings(self, layout):
         general_group = QGroupBox("General Settings")
@@ -179,8 +231,10 @@ class SettingsWidget(QWidget):
         # Add general settings widgets
         self.cards_per_batch = QSpinBox()
         self.cards_per_batch.setValue(20)
+        self.cards_per_batch.valueChanged.connect(lambda: self.save_setting("general/cards_per_batch", self.cards_per_batch.value()))
 
         self.save_intermediates = QCheckBox('Save Intermediate Files')
+        self.save_intermediates.toggled.connect(lambda: self.save_setting("general/save_intermediates", self.save_intermediates.isChecked()))
 
         general_layout.addRow('Cards per Batch:', self.cards_per_batch)
         general_layout.addRow(self.save_intermediates)
@@ -196,24 +250,23 @@ class SettingsWidget(QWidget):
         self.text_gen_option = QComboBox()
         self.text_gen_option.addItems(['Local GPT-2', 'GPT-4o-mini'])
         self.text_gen_option.currentIndexChanged.connect(self.update_text_gen_settings)
+        self.text_gen_option.currentTextChanged.connect(self.text_gen_option_changed.emit)
+        self.text_gen_option.currentTextChanged.connect(lambda text: self.save_setting("text_gen/option", text))
+
         card_text_layout.addRow('Text Generation Option:', self.text_gen_option)
 
-        # GPT-2 specific settings
-
-        self.gpt2_group = []
-        for widget in self.gpt2_group:
-            widget.setVisible(False)
+        # GPT-2 specific settings (Currently no additional settings in your original code)
+        self.gpt2_group = []  # Keep this as it is in case you need to add settings here later.
 
         # GPT-4o-mini specific settings
-
         self.theme_seeding = QCheckBox('Theme Seeding')
         self.sanity_check = QCheckBox('Sanity Check')
-        
+
         self.gpt4o_mini_group = [self.theme_seeding, self.sanity_check]
         for widget in self.gpt4o_mini_group:
-            widget.setVisible(False)
+            widget.setVisible(False)  # Hidden by default, shown based on selection
 
-        # Add settings widgets
+        # Add settings widgets for GPT-4o-mini
         card_text_layout.addRow(self.theme_seeding)
         card_text_layout.addRow(self.sanity_check)
         layout.addWidget(card_text_group)
@@ -225,8 +278,11 @@ class SettingsWidget(QWidget):
 
         # Option selector
         self.image_gen_option = QComboBox()
-        self.image_gen_option.addItems(['SD3', 'DALL-E', 'Internet Search']) 
+        self.image_gen_option.addItems(['SD3', 'DALL-E', 'Pixabay', 'Test'])
         self.image_gen_option.currentIndexChanged.connect(self.update_image_gen_settings)
+        self.image_gen_option.currentTextChanged.connect(self.image_gen_option_changed.emit)
+        self.image_gen_option.currentTextChanged.connect(lambda text: self.save_setting("image_gen/option", text))
+
         image_gen_layout.addRow('Image Generation Option:', self.image_gen_option)
 
         # SD3 specific settings
@@ -235,6 +291,7 @@ class SettingsWidget(QWidget):
         self.sd3_iterations.setValue(30)
         self.sd3_iterations.setMinimum(0)
         self.sd3_iterations.setMaximum(50)
+        self.sd3_iterations.valueChanged.connect(lambda: self.save_setting("sd3/iterations", self.sd3_iterations.value()))
 
         self.sd3_setting_group = [self.sd3_iterations, self.sd3_iterations_label]
         for widget in self.sd3_setting_group:
@@ -243,51 +300,38 @@ class SettingsWidget(QWidget):
         # DALL-E specific settings
         self.dalle_wide = QComboBox()
         self.dalle_wide.addItems(["1024x1024", "1792x1024"])
+        self.dalle_wide.currentTextChanged.connect(lambda text: self.save_setting("dalle/wide", text))
+        self.dalle_wide.currentTextChanged.connect(self.dalle_wide_changed.emit)
         self.dalle_hd = QCheckBox('HD')
+        self.dalle_hd.toggled.connect(lambda: self.save_setting("dalle/hd", self.dalle_hd.isChecked()))
+        self.dalle_hd.toggled.connect(self.dalle_hd_changed.emit)
 
         # Additional prompting for DALL-E
-        self.dalle_prompt_chars_label = QLabel('Maximum Image Prompt Size (chars):')
-        self.dalle_prompt_chars = QSlider(Qt.Orientation.Horizontal, self)
-        self.dalle_prompt_chars.setValue(800)
-        self.dalle_prompt_chars.setMinimum(400)
-        self.dalle_prompt_chars.setMaximum(4000)
-        self.dalle_prompt_chars.setTickInterval(400)
-        self.dalle_prompt_chars.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.dalle_prompt_chars_value = QLabel('800')
-        self.dalle_prompt_chars.valueChanged.connect(lambda value: self.dalle_prompt_chars_value.setText(str(value)))
-
 
         self.additional_prompting_label = QLabel('Additional Prompting:')
         self.additional_prompting_setting = QTextEdit()
         self.additional_prompting_setting.setPlaceholderText('Enter additional prompting...')
-        
-        self.dalle_setting_group = [self.dalle_hd, self.dalle_wide, self.dalle_prompt_chars, self.dalle_prompt_chars_label, self.dalle_prompt_chars_value, self.additional_prompting_label, self.additional_prompting_setting]
+        self.additional_prompting_setting.textChanged.connect(lambda: self.save_setting("dalle/additional_prompting", self.additional_prompting_setting.toPlainText()))
+        self.additional_prompting_setting.textChanged.connect(self.on_additional_prompt_changed)
+
+        self.dalle_setting_group = [self.dalle_hd, self.dalle_wide, self.additional_prompting_label, self.additional_prompting_setting]
         for widget in self.dalle_setting_group:
             widget.setVisible(False)
 
-        # Internet Search specific settings
-
-        self.internet_search_group = []
-        for widget in self.internet_search_group:
-            widget.setVisible(False)
-
-        
-
-        # Add settings widgets
+        # Add all the settings widgets
         image_gen_layout.addRow(self.sd3_iterations_label, self.sd3_iterations)
         image_gen_layout.addRow(self.dalle_wide)
         image_gen_layout.addRow(self.dalle_hd)
 
-        slider_layout = QHBoxLayout()
-        slider_layout.addWidget(self.dalle_prompt_chars)
-        slider_layout.addWidget(self.dalle_prompt_chars_value)
-        slider_widg = QWidget()
-        slider_widg.setLayout(slider_layout)
 
-        image_gen_layout.addRow(self.dalle_prompt_chars_label, slider_widg)
-        image_gen_layout.addRow(self.additional_prompting_label, self.additional_prompting_setting)  # Added settings
+        image_gen_layout.addRow(self.additional_prompting_label, self.additional_prompting_setting)
         layout.addWidget(image_gen_group)
+    def on_additional_prompt_changed(self):
+        # Get the current text from the QTextEdit
+        text = self.additional_prompting_setting.toPlainText()
 
+        # Emit the signal with the text as an argument
+        self.dalle_additional_prompt_changed.emit(text)
     def add_card_rendering_settings(self, layout):
         card_template_group = QGroupBox("Card Rendering")
         card_template_layout = QFormLayout()
@@ -296,9 +340,47 @@ class SettingsWidget(QWidget):
         # Option selector
         self.card_template_option = QComboBox()
         self.card_template_option.addItems(['Proxyshop', 'HTML Render'])
+        self.card_template_option.currentTextChanged.connect(lambda text: self.save_setting("card_render/option", text))
+
         card_template_layout.addRow('Card Rendering Option:', self.card_template_option)
 
         layout.addWidget(card_template_group)
+
+    def save_setting(self, key, value):
+        """Save a setting using QSettings."""
+        settings = QSettings("FblthpFoundries", "CardGenerator")
+        settings.setValue(key, value)
+
+    def load_settings(self):
+        """Load settings using QSettings and apply them to widgets."""
+        settings = QSettings("FblthpFoundries", "CardGenerator")
+
+        # Load general settings
+        self.cards_per_batch.setValue(int(settings.value("general/cards_per_batch", 20)))
+        self.save_intermediates.setChecked(settings.value("general/save_intermediates", False, type=bool))
+
+        # Load text generation settings
+        text_gen_option = settings.value("text_gen/option", "Local GPT-2")
+        index = self.text_gen_option.findText(text_gen_option)
+        if index >= 0:
+            self.text_gen_option.setCurrentIndex(index)
+
+        # Load image generation settings
+        image_gen_option = settings.value("image_gen/option", "SD3")
+        index = self.image_gen_option.findText(image_gen_option)
+        if index >= 0:
+            self.image_gen_option.setCurrentIndex(index)
+
+        # Load SD3 and DALL-E specific settings
+        self.sd3_iterations.setValue(int(settings.value("sd3/iterations", 30)))
+        self.dalle_hd.setChecked(settings.value("dalle/hd", False, type=bool))
+        self.additional_prompting_setting.setPlainText(settings.value("dalle/additional_prompting", "", type=str))
+
+        # Load card rendering settings
+        card_template_option = settings.value("card_render/option", "Proxyshop")
+        index = self.card_template_option.findText(card_template_option)
+        if index >= 0:
+            self.card_template_option.setCurrentIndex(index)
 
     def update_text_gen_settings(self, index):
         # Show/hide specific settings and labels based on selected option
@@ -313,19 +395,32 @@ class SettingsWidget(QWidget):
             widget.setVisible(index == 0)
         for widget in self.dalle_setting_group:
             widget.setVisible(index == 1)
-        for widget in self.internet_search_group:
-            widget.setVisible(index == 2)
+
 
 class ImageGenWidget(QWidget):
     def __init__(self, card_list_widget, parent=None):
         super().__init__(parent)
-
-        self.image_generator = DALLEImageGenerator()     #   TODO: SETTINGS
+        settings = QSettings("FblthpFoundries", "CardGenerator")
+        self.image_gen_name = settings.value("image_gen/option", "SD3")
+        if self.image_gen_name == "Pixabay":
+            self.image_generator = PixabayImageGenerator()
+        elif self.image_gen_name == "DALL-E":
+            self.image_generator = DALLEImageGenerator()
+        elif self.image_gen_name == "SD3":
+            self.image_generator = SD3ImageGenerator()
+        elif self.image_gen_name == "Test":
+            self.image_generator = TestImageGenerator()
 
         self.card_list_widget = card_list_widget
+
+
+
         self.setLayout(QVBoxLayout())
         buttonbar = QWidget()
         buttonbar.setLayout(QHBoxLayout())
+        self.generator_name_label = QLabel("Generator: " + self.image_gen_name)
+        buttonbar.layout().addWidget(self.generator_name_label)
+
         self.load_button = QPushButton('Load Current Cards')
         self.load_button.clicked.connect(self.load_cards)
         buttonbar.layout().addWidget(self.load_button)
@@ -345,6 +440,27 @@ class ImageGenWidget(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.image_container)
         self.layout().addWidget(self.scroll_area)
+
+    def swap_image_generator(self, generator):
+        if generator == "SD3":
+            self.image_generator = SD3ImageGenerator()
+        elif generator == "DALL-E":
+            self.image_generator = DALLEImageGenerator()
+        elif generator == "Pixabay":
+            self.image_generator = PixabayImageGenerator()
+        elif generator == "Test":
+            self.image_generator = TestImageGenerator()
+        else:
+            raise Exception("Unrecognized Image Generator")
+        self.image_gen_name = generator
+        self.generator_name_label.setText(f"Generator: {self.image_gen_name}")
+
+    def update_dalle_wide(self, wide):
+        self.image_generator.size = wide
+    def update_dalle_hd(self, hd):
+        self.image_generator.quality = "hd" if hd else "standard"
+    def update_dalle_add_text(self, text):
+        self.image_generator.additional_prompt = text
     def load_cards(self):
         self.cards_uuid_dict = self.card_list_widget.get_cards()
         # Clear the current image gallery
@@ -462,7 +578,13 @@ class CardListWidget(QWidget):
     def __init__(self, supreme_ruler=None):
         super().__init__()
         self.supreme_ruler = supreme_ruler
-        self.card_generator = ChatGPTCardGenerator() #   TODO: SETTINGS
+        settings = QSettings("FblthpFoundries", "CardGenerator")
+        self.card_gen_name = settings.value("text_gen/option", "Local GPT-2")
+        if self.card_gen_name == "Local GPT-2":
+            self.card_generator = LocalCardGenerator()
+        elif self.card_gen_name == "GPT-4o-mini":
+            self.card_generator = ChatGPTCardGenerator()
+
         self.card_list_layout = QVBoxLayout(self)
 
         self.list = QListWidget(self)
@@ -482,11 +604,24 @@ class CardListWidget(QWidget):
         self.buttons=[self.gen_button, self.reroll_button, self.edit_button]
 
         button_layout = QVBoxLayout()
+        self.gen_label = QLabel("Generator: " + self.card_gen_name)
+        button_layout.addWidget(self.gen_label)
         button_layout.addWidget(self.gen_button)
         button_layout.addWidget(self.reroll_button)
         button_layout.addWidget(self.edit_button)
 
         self.card_list_layout.addLayout(button_layout)
+
+    def swap_text_generator(self, generator):
+        print(generator)
+        if generator == "Local GPT-2":
+            self.card_generator = LocalCardGenerator()
+            self.card_gen_name = "Local GPT-2"
+            self.gen_label.setText("Generator: Local GPT-2")
+        elif generator == "GPT-4o-mini":
+            self.card_generator = ChatGPTCardGenerator()
+            self.card_gen_name = "GPT-4o-mini"
+            self.gen_label.setText("Generator: GPT-4o-mini")
     def gen(self):
         self.disableButtons(True)
         num, ok = QInputDialog.getInt(self, 'Number to Generate', 'Enter number of cards to generate:', 10, 1, 500, 1)
@@ -546,7 +681,7 @@ class MainWindow(QWidget):
         super().__init__(*args,**kwargs)
 
         self.setWindowTitle("Fblthp Foundries Cube Generator")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1600, 1000)
 
         layout = QGridLayout(self)
         self.setLayout(layout)
@@ -569,6 +704,11 @@ class MainWindow(QWidget):
         self.file_widget = FileWidget()
         self.file_widget.saveSignal.connect(self.toXML)
         self.file_widget.saveSignal.connect(self.toMSE)
+        self.settings_widget.text_gen_option_changed.connect(self.card_list_widget.swap_text_generator)
+        self.settings_widget.image_gen_option_changed.connect(self.image_gen_widget.swap_image_generator)
+        self.settings_widget.dalle_wide_changed.connect(self.image_gen_widget.update_dalle_wide)
+        self.settings_widget.dalle_hd_changed.connect(self.image_gen_widget.update_dalle_hd)
+        self.settings_widget.dalle_additional_prompt_changed.connect(self.image_gen_widget.update_dalle_add_text)
 
         self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
         self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')

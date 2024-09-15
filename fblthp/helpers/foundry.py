@@ -186,7 +186,11 @@ class ChatGPTCardGenerator(BaseCardGenerator):
         if resp[:4] == "json":
             resp = resp[4:]
         #print(f"CHATGPT: {resp}")
-        return True, json.loads(resp)
+        try:
+            resp = json.loads(resp)
+            return True, resp
+        except:
+            return False, None
 
 class LocalCardGenerator(BaseCardGenerator):
     def __init__(self):

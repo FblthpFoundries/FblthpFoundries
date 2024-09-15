@@ -728,6 +728,12 @@ class CardListWidget(QWidget):
         for button in self.buttons:
             button.setDisabled(yes)
 
+    def count(self):
+        return self.list.count()
+    
+    def item(self, i):
+        return self.list.item(i)
+
 
 class MainWindow(QWidget):
     def __init__(self, *args, **kwargs):
@@ -808,7 +814,7 @@ class MainWindow(QWidget):
         cardTag.appendChild(name)
 
         text = root.createElement('text')
-        text.appendChild(root.createTextNode(card.oracle))
+        text.appendChild(root.createTextNode(card.oracle_text))
         cardTag.appendChild(text)
 
         setTag = root.createElement('set')
@@ -816,11 +822,11 @@ class MainWindow(QWidget):
         cardTag.appendChild(setTag)
 
         row = '1'
-        if 'land' in card.type.lower():
+        if 'land' in card.type_line.lower():
             row = '0'
-        elif 'creature ' in card.type.lower():
+        elif 'creature ' in card.type_line.lower():
             row = '2'
-        elif 'instant' in card.type.lower() or 'sorcery' in card.type.lower():
+        elif 'instant' in card.type_line.lower() or 'sorcery' in card.type_line.lower():
             row = '3'
 
         tableRow = root.createElement('tablerow')
@@ -842,8 +848,8 @@ class MainWindow(QWidget):
 
         cards = root.createElement('cards')
 
-        for row in range(self.list.count()):
-            cards.appendChild(self.cardXML(self.list.item(row), root))
+        for row in range(self.card_list_widget.count()):
+            cards.appendChild(self.cardXML(self.card_list_widget.item(row), root))
 
         xml.appendChild(cards)
 
@@ -853,7 +859,7 @@ class MainWindow(QWidget):
             f.write(xml_str)
 
     def toMSE(self, fileName):
-        cards = [self.list.item(i) for i in range(self.list.count())]
+        cards = [self.card_list_widget.item(i) for i in range(self.card_list_widget.count())]
         genMSE.createMSE(fileName, cards)
 
 

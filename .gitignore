@@ -9,3 +9,4 @@ fblthp/discord-app/.env
 fblthp/cube-app/secret_tokens.py
 fblthp/helpers/secret_tokens.py
 fblthp/abilities.json
+fblthp/images/downloaded/*

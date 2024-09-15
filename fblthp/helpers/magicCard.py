@@ -1,8 +1,10 @@
 from PyQt6.QtWidgets import QListWidgetItem
+import uuid
 
 class Card(QListWidgetItem):
     def __init__(self, cardDict):
         super().__init__()
+        self.uuid = uuid.uuid4()
         self.name = cardDict['name']
         self.oracle_text = cardDict['oracle_text'].replace('<', '{').replace('>', '}')
         self.type_line = cardDict['type_line']

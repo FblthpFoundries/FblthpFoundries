@@ -5,15 +5,17 @@ from PyQt6.QtWidgets import (
     QGroupBox, QLineEdit, QScrollArea, QSizePolicy, QStackedWidget, 
     QTextEdit, QSlider, QHBoxLayout, 
 )
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QImage, QPixmap, QMovie
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
 from xml.dom import minidom
 import sys, os
+import uuid
 from helpers.foundry import ChatGPTCardGenerator, LocalCardGenerator
-from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, GoogleImageGenerator
+from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, PixabayImageGenerator, TestImageGenerator
 from helpers.magicCard import Card
 from helpers import genMSE
 from pathlib import Path
+import threading
 BASE_DIR = Path(__file__).resolve().parent
 IMAGE_DIR = BASE_DIR / "images"
 class WorkerThread(QThread):
@@ -32,6 +34,65 @@ class WorkerThread(QThread):
         cards = self.card_generator.create_cards(self.num, updateProgress)
         self.finished.emit(cards)
 
+class ImageGenerationThread(QThread):
+    image_generated = pyqtSignal(uuid.UUID, str)  # uuid, image_path
+
+    def __init__(self, image_generator, card):
+        super().__init__()
+        self.image_generator = image_generator
+        self.card = card
+
+    def run(self):
+        try:
+            image_path = self.image_generator.generate_image(self.card)
+            self.card.image_path = image_path
+            self.image_generated.emit(self.card.uuid, image_path)
+        except Exception as e:
+            print(f"Error generating image for card {self.card.name}: {e}")
+
+class CardImageWidget(QWidget):
+    def __init__(self, card, parent=None):
+        super().__init__(parent)
+        self.card = card
+        self.generating = False
+        self.failed = False
+        self.layout = QVBoxLayout(self)
+        self.image_label = QLabel()
+        self.title_label = QLabel(card.name)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setFixedHeight(30)  # Fixed height for title
+        self.layout.addWidget(self.title_label)
+        self.layout.addWidget(self.image_label)
+        self.layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for tighter layout
+        self.setLayout(self.layout)
+        self.uuid = card.uuid
+
+        self.update_image()
+
+    def update_image(self):
+        if self.card.image_path:
+            image = QImage(self.card.image_path)
+            pixmap = QPixmap.fromImage(image)
+            self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+        elif self.generating:
+            image = QMovie(str(IMAGE_DIR / "defaults" / "loading.gif"))
+            image.setScaledSize(QSize(150, 150))
+            self.image_label.setMovie(image)
+            self.image_label.resize(QSize(300, 300))
+            image.start()
+            # image = QImage(str(IMAGE_DIR / "defaults" / "loading.gif"))
+            # pixmap = QPixmap.fromImage(image)
+            # self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+        elif self.failed:
+            image = QImage(str(IMAGE_DIR / "defaults" / "failed.png"))
+            pixmap = QPixmap.fromImage(image)
+            self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+        else:
+            image = QImage(str(IMAGE_DIR / "defaults" / "no-image-available.png"))
+            pixmap = QPixmap.fromImage(image)
+            self.image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
+        
 class SettingsWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -211,7 +272,7 @@ class ImageGenWidget(QWidget):
     def __init__(self, card_list_widget, parent=None):
         super().__init__(parent)
 
-        self.image_generator = GoogleImageGenerator()
+        self.image_generator = PixabayImageGenerator()
 
         self.card_list_widget = card_list_widget
         self.setLayout(QVBoxLayout())
@@ -237,8 +298,48 @@ class ImageGenWidget(QWidget):
         self.scroll_area.setWidget(self.image_container)
         self.layout().addWidget(self.scroll_area)
     def load_cards(self):
-        cards = self.card_list_widget.get_cards()
+        self.cards_uuid_dict = self.card_list_widget.get_cards()
         # Clear the current image gallery
+        self._reload_cards()
+    
+    def generate_images(self):
+        if not isinstance(self.image_generator, SD3ImageGenerator):
+        # Launch separate threads for each card without images using QThread
+            self.threads = []
+            for card in self.cards_uuid_dict.values():
+                if not card.image_path:
+                    thread = ImageGenerationThread(self.image_generator, card)
+                    thread.image_generated.connect(self._update_image)
+                    self.widgies[card.uuid].failed = False
+                    self.widgies[card.uuid].generating = True
+                    self.widgies[card.uuid].update_image()
+                    print(self.widgies[card.uuid].generating)
+                    thread.start()
+                    self.threads.append(thread)
+        else:
+            # Sequential image generation for SD3ImageGenerator
+            for card in self.cards:
+                if not card.image_path:
+                    try:
+                        card.image_path = self.image_generator.generate_image(card)
+                    except Exception as e:
+                        print(f"Error generating image for card {card}: {e}")
+        #self._reload_cards()
+    
+    def _update_image(self, uuid, img_path):
+        self.cards_uuid_dict[uuid].image_path = img_path
+        for i in range(self.image_layout.count()):
+            widget = self.image_layout.itemAt(i).widget()
+            if widget:
+                if widget.uuid == uuid:
+                    if not img_path:
+                        widget.generating = False
+                        widget.failed = True
+                    widget.update_image()
+                    break
+
+    def _reload_cards(self):
+        self.widgies = {}
         for i in reversed(range(self.image_layout.count())):
             widget = self.image_layout.itemAt(i).widget()
             if widget:
@@ -247,42 +348,13 @@ class ImageGenWidget(QWidget):
         # Get card titles from the list widget
 
         # Example image generation
-        for i, card in enumerate(cards):
-
-            title = card.name
-            image_label = QLabel()
-            title_label = QLabel(title)
-            title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            title_label.setFixedHeight(30)  # Fixed height for title
+        for i, card in enumerate(self.cards_uuid_dict.values()):
             
-            # Placeholder image generation
-            if card.image_path:
-                image = QImage(card.image_path)
-            else:
-                image = QImage(str(IMAGE_DIR / "no-image-available.png"))
-            pixmap = QPixmap.fromImage(image)
-            image_label.setPixmap(pixmap.scaled(QSize(300, 300), Qt.AspectRatioMode.KeepAspectRatio))
-            
-            # Create a vertical layout for title and image
-            vertical_layout = QVBoxLayout()
-            vertical_layout.addWidget(title_label)
-            vertical_layout.addWidget(image_label)
-            vertical_layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for tighter layout
-            vertical_widget = QWidget()
-            vertical_widget.setLayout(vertical_layout)
+            widg = CardImageWidget(card)
+            self.widgies[card.uuid] = widg
             
             # Add to grid layout (2 images wide)
-            self.image_layout.addWidget(vertical_widget, i // 2, i % 2)
-    def generate_images(self):
-        pass
-    def load_image(self, file_path):
-        if os.path.exists(file_path):
-            image = QImage(file_path)
-            if not image.isNull():
-                pixmap = QPixmap.fromImage(image)
-                return pixmap
-        return None
+            self.image_layout.addWidget(widg, i // 2, i % 2)
 
     def update_gallery(self, image_paths):
         # Clear existing images
@@ -311,12 +383,6 @@ class ImageGenWidget(QWidget):
                 vertical_widget.setLayout(vertical_layout)
                 
                 self.image_layout.addWidget(vertical_widget, i // 2, i % 2)
-
-    def truncate_text(self, text, max_length):
-        """ Truncate the text to a maximum length and add '...' if it's too long. """
-        if len(text) > max_length:
-            return text[:max_length] + '...'
-        return text
 
 class FileWidget(QWidget):
     saveSignal = pyqtSignal(str)
@@ -353,6 +419,8 @@ class CardListWidget(QWidget):
         self.card_list_layout = QVBoxLayout(self)
 
         self.list = QListWidget(self)
+
+        self.uuid_dict = {}
         self.card_list_layout.addWidget(self.list)
 
         self.gen_button = QPushButton('Gen')
@@ -399,12 +467,11 @@ class CardListWidget(QWidget):
         self.loading.done(0)
         self.disableButtons(False)
         for card in cards:
-            self.list.addItem(Card(card))
+            c = Card(card)
+            self.uuid_dict[c.uuid] = c
+            self.list.addItem(c)
     def get_cards(self):
-        cards = []
-        for i in range(self.list.count()):
-            cards.append(self.list.item(i))
-        return cards
+        return self.uuid_dict
 
         
 
@@ -413,8 +480,11 @@ class CardListWidget(QWidget):
         if curr_row >= 0:
             newCard = self.card_generator.reroll()
             oldCard = self.list.takeItem(curr_row)
+            del self.uuid_dict[oldCard.uuid]
             del oldCard
-            self.list.insertItem(curr_row, Card(newCard))
+            c = Card(newCard)
+            self.uuid_dict[c.uuid] = c
+            self.list.insertItem(curr_row, c)
             self.list.setCurrentRow(curr_row)
     def edit(self):
         pass

@@ -6,14 +6,17 @@ import re
 import torch
 import numpy as np
 from PIL import Image
+from io import BytesIO
 import os
+import uuid
+from PyQt6.QtCore import QObject, pyqtSignal
 from openai import OpenAI, BadRequestError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .distribution import seed_card
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = BASE_DIR / "helpers" / "prompts"
-IMAGE_DIR = BASE_DIR / "images"
+IMAGE_DIR = BASE_DIR / "images" / "downloaded"
 
 # CARD GENERATORS
 
@@ -307,10 +310,10 @@ class LocalCardGenerator(BaseCardGenerator):
 # IMAGE GENERATORS
 
 
-class BaseImageGenerator():
+class BaseImageGenerator(QObject):
     def __init__(self):
-        pass
-    def gen_image(self, card):
+        super().__init__()
+    def generate_image(self, card):
         pass
 
 class DALLEImageGenerator(BaseImageGenerator):
@@ -322,6 +325,25 @@ class DALLEImageGenerator(BaseImageGenerator):
         self.size = size
         self.additional_prompt=""
         self.text_model = text_model
+    def generate_image(self, card):
+        success, image_prompt = self.generate_image_prompt(card)
+        if success:
+            success, image_data = self.generate_an_image(image_prompt)
+            if success:
+                image = Image.open(BytesIO(image_data))
+
+                # Ensure the image directory exists
+                if not os.path.exists(IMAGE_DIR):
+                    os.mkdir(IMAGE_DIR)
+
+                # Define the full path to save the image
+                image_path = os.path.join(IMAGE_DIR, f"{card.name}_{uuid.uuid4()}.png")
+                image.save(image_path)
+
+                return image_path
+
+            else:
+                return None
     def generate_images(self, cards):
         images = []
         for card in cards:
@@ -340,16 +362,16 @@ class DALLEImageGenerator(BaseImageGenerator):
         # Send the request to ChatGPT
         with open(PROMPTS_DIR / "EXTRACTION.txt", "r") as f:
             prompt = f.read().format(
-                type_line=card['type_line'],
-                name=card['name'],
-                mana_cost=card['mana_cost'],
-                oracle_text=card['oracle_text'],
-                power=card['power'],
-                toughness=card['toughness'],
-                loyalty=card['loyalty'],
-                flavor_text=card['flavor_text'],
-                rarity=card['rarity'],
-                theme=card['theme'],
+                type_line=card.type_line,
+                name=card.name,
+                mana_cost=card.mana_cost,
+                oracle_text=card.oracle_text,
+                power=card.power,
+                toughness=card.toughness,
+                loyalty=card.loyalty,
+                flavor_text=card.flavor_text,
+                rarity=card.rarity,
+                theme=card.theme,
                 code_adds = "",
                 additional_prompt=self.additional_prompt,
                 max_chars=max_chars
@@ -433,16 +455,55 @@ class FluxImageGenerator(BaseImageGenerator):
     def generate_images(self, cards):
         pass
 
-class GoogleImageGenerator(BaseImageGenerator):
+class PixabayImageGenerator(BaseImageGenerator):
     def __init__(self):
         super().__init__()
-    def generate_images(self, cards):
-        pass
+        from helpers.constants import PIXABAY_API_KEY
+        self.api_key = PIXABAY_API_KEY
+        self.search_url = "https://pixabay.com/api/"
 
+    def generate_image(self, card):
+        # Search for an image matching card.name (or fantasy-related keywords)
+        params = {
+            "key": self.api_key,
+            "q": card.name,  # You can add custom tags like "fantasy" if needed
+            "image_type": "illustration",
+            "category": "fantasy",
+            #"safesearch": "true",
+            "per_page": 3
+        }
+        response = requests.get(self.search_url, params=params)
+        response.raise_for_status()
+
+        results = response.json()
+        if not results['hits']:
+            print(f"No images found for {card.name}")
+            return None
+
+        # Get the image URL
+        image_url = results['hits'][0]['largeImageURL']
+        
+        # Download the image
+        image_response = requests.get(image_url)
+        image_response.raise_for_status()
+
+        # Load the image into PIL and resize it
+        image = Image.open(BytesIO(image_response.content))
+        image = image.resize((800, 600))
+
+        # Ensure the image directory exists
+        if not os.path.exists(IMAGE_DIR):
+            os.mkdir(IMAGE_DIR)
+
+        # Define the full path to save the image
+        image_path = os.path.join(IMAGE_DIR, f"{card.name}_{card.uuid}.png")
+        image.save(image_path)
+
+        return image_path
 class TestImageGenerator(BaseImageGenerator):
     def __init__(self):
         super().__init__()
-    def gen_image(self, card):
+    def generate_image(self, card):
         # Define the fixed size of the image
         width, height = 800, 600
 
@@ -469,17 +530,16 @@ class TestImageGenerator(BaseImageGenerator):
 
                 # Set the pixel color
                 pixels[x, y] = (r, g, b)
-
-        os.mkdir(IMAGE_DIR)
+        if not os.path.exists(IMAGE_DIR):
+            os.mkdir(IMAGE_DIR)
 
         # Define the full path to save the image
         image_path = os.path.join(IMAGE_DIR, "gradient.png")
 
         # Save the image
         image.save(image_path)
-
-        # Return the path to the saved image
         return image_path
+        # Return the path to the saved image
 if __name__ == "__main__":
     import cv2
     cardgenerator = ChatGPTCardGenerator()

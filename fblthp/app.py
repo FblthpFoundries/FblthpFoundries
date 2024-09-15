@@ -81,34 +81,6 @@ class MainWindow(QWidget):
 
         return setTag
 
-    def cardXML(self, card, root):
-        cardTag = root.createElement('card')
-
-        name = root.createElement('name')
-        name.appendChild(root.createTextNode(card.name))
-        cardTag.appendChild(name)
-
-        text = root.createElement('text')
-        text.appendChild(root.createTextNode(card.oracle_text))
-        cardTag.appendChild(text)
-
-        setTag = root.createElement('set')
-        setTag.appendChild(root.createTextNode('FFAI'))
-        cardTag.appendChild(setTag)
-
-        row = '1'
-        if 'land' in card.type_line.lower():
-            row = '0'
-        elif 'creature ' in card.type_line.lower():
-            row = '2'
-        elif 'instant' in card.type_line.lower() or 'sorcery' in card.type_line.lower():
-            row = '3'
-
-        tableRow = root.createElement('tablerow')
-        tableRow.appendChild(root.createTextNode(row))
-        cardTag.appendChild(tableRow)
-
-        return cardTag
 
     def toXML(self, fileName):
         root = minidom.Document()
@@ -124,7 +96,7 @@ class MainWindow(QWidget):
         cards = root.createElement('cards')
 
         for row in range(self.card_list_widget.count()):
-            cards.appendChild(self.cardXML(self.card_list_widget.item(row), root))
+            cards.appendChild(self.card_list_widget.item(row).getXML(root))
 
         xml.appendChild(cards)
 

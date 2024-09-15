@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QListWidgetItem
-import uuid
+import uuid, re
 
 class Card(QListWidgetItem):
     def __init__(self, cardDict):
@@ -25,3 +25,88 @@ class Card(QListWidgetItem):
 
     def set_image_path(self, path):
         self.image_path = path
+
+    def getXML(self, root):
+        cardTag = root.createElement('card')
+
+        name = root.createElement('name')
+        name.appendChild(root.createTextNode(self.name))
+        cardTag.appendChild(name)
+
+        text = root.createElement('text')
+        text.appendChild(root.createTextNode(self.oracle_text))
+        cardTag.appendChild(text)
+
+        setTag = root.createElement('set')
+        setTag.appendChild(root.createTextNode('FFAI'))
+        cardTag.appendChild(setTag)
+
+        row = '1'
+        if 'land' in self.type_line.lower():
+            row = '0'
+        elif 'creature ' in self.type_line.lower():
+            row = '2'
+        elif 'instant' in self.type_line.lower() or 'sorcery' in self.type_line.lower():
+            row = '3'
+
+        tableRow = root.createElement('tablerow')
+        tableRow.appendChild(root.createTextNode(row))
+        cardTag.appendChild(tableRow)
+
+        return cardTag
+
+
+    def genMSE(self):
+        types = self.type_line.split("-")
+        angry = self.oracle_text.replace('\n', '\n\t\t')
+        oracle = self.oracle_text if not '\n' in self.oracle_text else f"\n\t\t{angry}"
+        flavor = self.flavor_text
+
+        text = 'card:\n'
+        if 'planeswalker' in types[0].lower():
+            text += '\tstylesheet: m15-mainframe-planeswalker\n\tstylesheet_version: 2024-01-05\n'
+        text += f'\tname: {self.name}\n'
+
+        if not 'planeswalker' in types[0].lower():
+            text += f'\trule_text: {oracle.replace('} {', '').replace('{','').replace('}', '')}\n'
+        else:
+            text += parsePlaneswalker(self.oracle_text)
+        text += f'\tsuper_type: {types[0]}\n'
+        if self.image_path:
+            text += f'\timage: {self.image_path}\n'
+        else:
+            text += '\timage: picture\n'
+        if len(types) > 1:
+            text += f'\tsub_type: {types[1]}\n'
+        if self.power:
+            text += f'\tpower: {self.power}\n'
+        if self.toughness:
+            text += f'\ttoughness: {self.toughness}\n'
+        if self.loyalty:
+            text += f'\tloyalty: {self.loyalty}\n'
+        if self.flavor_text:
+            print('flavortown')
+            text += f'\tflavor_text: {flavor}\n'
+        if self.mana_cost:
+            text += f'\tcasting_cost: {self.mana_cost.replace("} {", "").replace("{","").replace("}", "")}\n'
+
+        return text[:-1]
+    
+
+    def parsePlaneswalker(text):
+        loyaltyRE = r'[\+\-]*[0-9]+:'
+        parsed = ''
+        lines = text.split('\n')
+
+        lineCounter = 1
+
+        for line in lines:
+            if re.search(loyaltyRE, line):
+                split = line.split(':')
+                parsed += f'\tloyalty_cost_{lineCounter}: {split[0]}\n'
+                parsed += f'\tlevel_{lineCounter}_text: {split[1]}\n'
+            else:
+                parsed += f'\tlevel_{lineCounter}_text: {line}\n'
+            lineCounter+=1
+
+        return parsed

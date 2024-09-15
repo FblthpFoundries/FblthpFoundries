@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QLineEdit, QScrollArea, QSizePolicy, QStackedWidget, 
     QTextEdit, QSlider, QHBoxLayout, 
 )
-from PyQt6.QtGui import QImage, QPixmap, QMovie
+from PyQt6.QtGui import QImage, QPixmap, QMovie, QFont, QPalette, QColor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize
 from xml.dom import minidom
 import sys, os
@@ -56,20 +56,68 @@ class CardImageWidget(QWidget):
         self.card = card
         self.generating = False
         self.failed = False
+
+        # Create layout and labels
         self.layout = QVBoxLayout(self)
         self.image_label = QLabel()
         self.title_label = QLabel(card.name)
+
+        # Style the title label (centered, clean font, underlined)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setWordWrap(False)  # No need for word wrapping
+        self.title_label.setFont(QFont('Arial', 14, QFont.Weight.Medium))  # Start with a default font size and weight
+        self.title_label.setStyleSheet("color: #E0E0E0; text-decoration: underline;")  # Underline + light text
+
+        # Initial title size adjustments
+        self.title_label.setFixedHeight(40)  # Fixed height
+        self.title_label.setFixedWidth(320)  # Give more horizontal room
+
+        # Adjust the font size to fit
+        self.adjust_font_size()
+
+        # Style the image label (center the image)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setFixedHeight(30)  # Fixed height for title
-        self.layout.addWidget(self.title_label)
-        self.layout.addWidget(self.image_label)
-        self.layout.setContentsMargins(0, 0, 0, 0)  # Remove margins for tighter layout
-        self.setLayout(self.layout)
+        self.image_label.setFixedSize(280, 280)  # A bit more compact
+
+        # Add title and image to the layout
+        self.layout.addWidget(self.title_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.layout.addWidget(self.image_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.layout.setContentsMargins(10, 10, 10, 10)  # Cleaner margins
+        self.layout.setSpacing(5)  # Subtle spacing
+
+        # Add modern dark mode styling with reduced rounded corners and underlined title
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #1e1e1e;  /* Dark background */
+                border: 1px solid #4c4c4c;  /* Subtle border */
+                border-radius: 5px;  /* Much less rounded corners */
+                padding: 10px;
+            }
+            QLabel {
+                color: #E0E0E0;  /* Lighter text */
+            }
+        """)
+
+        # Add drop shadow to the card for depth
+        self.setAutoFillBackground(True)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, QColor("#1e1e1e"))  # Dark background
+        self.setPalette(palette)
+
         self.uuid = card.uuid
-
+        
+        # If an image exists, load it. Otherwise, start the generation process.
         self.update_image()
+    def adjust_font_size(self):
+        """Automatically adjusts the font size to fit within the title label."""
+        font = self.title_label.font()
+        font_size = font.pointSize()
 
+        # Reduce font size until the text fits within the width of the label
+        while self.title_label.fontMetrics().horizontalAdvance(self.card.name) > self.title_label.width() and font_size > 8:
+            font_size -= 1
+            font.setPointSize(font_size)
+            self.title_label.setFont(font)
     def update_image(self):
         if self.card.image_path:
             image = QImage(self.card.image_path)
@@ -272,7 +320,7 @@ class ImageGenWidget(QWidget):
     def __init__(self, card_list_widget, parent=None):
         super().__init__(parent)
 
-        self.image_generator = PixabayImageGenerator()
+        self.image_generator = DALLEImageGenerator()     #   TODO: SETTINGS
 
         self.card_list_widget = card_list_widget
         self.setLayout(QVBoxLayout())
@@ -313,7 +361,6 @@ class ImageGenWidget(QWidget):
                     self.widgies[card.uuid].failed = False
                     self.widgies[card.uuid].generating = True
                     self.widgies[card.uuid].update_image()
-                    print(self.widgies[card.uuid].generating)
                     thread.start()
                     self.threads.append(thread)
         else:
@@ -415,7 +462,7 @@ class CardListWidget(QWidget):
     def __init__(self, supreme_ruler=None):
         super().__init__()
         self.supreme_ruler = supreme_ruler
-        self.card_generator = LocalCardGenerator()
+        self.card_generator = ChatGPTCardGenerator() #   TODO: SETTINGS
         self.card_list_layout = QVBoxLayout(self)
 
         self.list = QListWidget(self)

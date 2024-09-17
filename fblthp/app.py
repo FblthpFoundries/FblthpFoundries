@@ -2,6 +2,8 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QGridLayout, QTabWidget, 
 )
 from xml.dom import minidom
+from os import listdir, remove
+from os.path import isfile, join
 import sys
 from helpers.settings import SettingsWidget
 from helpers.cardList import CardListWidget
@@ -109,9 +111,20 @@ class MainWindow(QWidget):
         cards = [self.card_list_widget.item(i) for i in range(self.card_list_widget.count())]
         genMSE.createMSE(fileName, cards)
 
+    def onClose(self):
+        imgPath = Path(__file__).parent / 'images' / 'downloaded'
+
+        toDelete = [f for f in listdir(imgPath) if isfile(join(imgPath, f))]
+
+        for f in toDelete:
+            if not f == 'gradient.png':
+               remove(imgPath/f) 
+
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()
+    app.aboutToQuit.connect(window.onClose)
 
     sys.exit(app.exec())

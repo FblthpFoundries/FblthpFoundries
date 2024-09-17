@@ -279,6 +279,8 @@ class LocalCardGenerator(BaseCardGenerator):
             card = {}
             
             # Extract each component using the patterns
+            if not re.search(card_pattern, card_match):
+                continue
             card['type_line'] = re.search(card_pattern, card_match).group(1).strip()
             
             name = re.search(name_pattern, card_match)
@@ -292,6 +294,8 @@ class LocalCardGenerator(BaseCardGenerator):
             if not card['oracle_text'] :
                 continue
             card['oracle_text'] = card['oracle_text'].replace('<br>', '\n')
+            if not card['name']:
+                continue
             card['oracle_text'] = card['oracle_text'].replace('~', card['name'])
             
             power = re.search(power_pattern, card_match)
@@ -426,32 +430,56 @@ class DALLEImageGenerator(BaseImageGenerator):
 class SD3ImageGenerator(BaseImageGenerator):
     def __init__(self):
         super().__init__()
+        self.pipe = None
+
+    def __load(self):
+        from diffusers import StableDiffusion3Pipeline
+        self.pipe = StableDiffusion3Pipeline.from_pretrained(
+                "stabilityai/stable-diffusion-3-medium-diffusers",
+                torch_dtype=torch.float16
+            )
+        self.pipe.to('cuda')
+        self.pipe.enable_cpu_offload()
+
+
     def generate_images(self, cards):
         pass
-    def generate_an_image(self, prompt, model="SD3"):
-        if model == "SD3":
-            from diffusers import StableDiffusion3Pipeline
-            try:
-                pipe = StableDiffusion3Pipeline.from_pretrained(
-                    "stabilityai/stable-diffusion-3-medium-diffusers",
-                    torch_dtype=torch.float16
-                )
-                pipe.enable_model_cpu_offload()
+    def generate_image(self, card):
+        if not self.pipe:
+            self.__load()
+        with open(PROMPTS_DIR / "SD3prompt.txt",'r') as f:
+            prompt = f.read().format(
+                type_line=card.type_line,
+                name=card.name,
+                mana_cost=card.mana_cost,
+                flavor_text=card.flavor_text,
+            )
+        try:
+            print('starting')
 
-                img = pipe(
-                    prompt=prompt,
-                    num_images_per_prompt=1,
-                    num_inference_steps=30,
-                    height=800,
-                    width=1024
-                ).images[0]
+            img = self.pipe(
+                prompt=prompt,
+                num_images_per_prompt=1,
+                num_inference_steps=15,
+                height=800,
+                width=1024
+            ).images[0]
+            print('done')
+            print(type(img))
 
-                return img
-            except Exception as e:
-                self.logger.error(f"Failed to generate image locally: {e}")
-                raise
-        else:
-            raise Exception(f"Model {model} not supported")
+
+            # Ensure the image directory exists
+            if not os.path.exists(IMAGE_DIR):
+                os.mkdir(IMAGE_DIR)
+
+            # Define the full path to save the image
+            image_path = os.path.join(IMAGE_DIR, f"{card.name}_{uuid.uuid4()}.png")
+            img.save(image_path)
+
+            return image_path
+        except Exception as e:
+            print(f"Failed to generate image locally: {e}")
+            raise
 
 class FluxImageGenerator(BaseImageGenerator):
     def __init__(self):

@@ -1,0 +1,9 @@
+Art for a magic the gathering card with the following characteristics:
+    Card Type: {type_line}
+    Name: {name}
+    Color Identity: {mana_cost}
+    Flavor Text: {flavor_text}
+The Art should be in the style of high fantasy and sometimes involve modern elements
+DO NOT PUT TEXT IN THE IMAGE
+
+

@@ -9,7 +9,7 @@ class Card(QListWidgetItem):
         self.oracle_text = cardDict['oracle_text'].replace('<', '{').replace('>', '}')
         self.type_line = cardDict['type_line']
         self.mana_cost = cardDict['mana_cost'].replace('<', '{').replace('>', '}') if 'mana_cost' in cardDict else None
-        self.flavor_text = cardDict['flavor_text'] if 'flavor_cost' in cardDict else None
+        self.flavor_text = cardDict['flavor_text'] if 'flavor_text' in cardDict else None
         self.power = cardDict['power'] if 'power' in cardDict else None
         self.toughness = cardDict['toughness'] if 'toughness' in cardDict else None
         self.loyalty = cardDict['loyalty'] if 'loyalty' in cardDict else None
@@ -19,6 +19,7 @@ class Card(QListWidgetItem):
         self.initial_card = cardDict['initial_card'] if 'initial_card' in cardDict else None
         self.chatgpt_prompt = cardDict['chatgpt_prompt'] if 'chatgpt_prompt' in cardDict else None
         self.image_path = cardDict['image_path'] if 'image_path' in cardDict else None
+
 
 
         self.setText(f"{self.name}, {self.type_line}, {self.mana_cost if not self.mana_cost == 'nan' else ''}:\n {self.oracle_text}\n{self.power + '/' + self.toughness if self.power else ''}{self.loyalty if self.loyalty else ''}")
@@ -54,46 +55,8 @@ class Card(QListWidgetItem):
         cardTag.appendChild(tableRow)
 
         return cardTag
-
-
-    def genMSE(self):
-        types = self.type_line.split("-")
-        angry = self.oracle_text.replace('\n', '\n\t\t')
-        oracle = self.oracle_text if not '\n' in self.oracle_text else f"\n\t\t{angry}"
-        flavor = self.flavor_text
-
-        text = 'card:\n'
-        if 'planeswalker' in types[0].lower():
-            text += '\tstylesheet: m15-mainframe-planeswalker\n\tstylesheet_version: 2024-01-05\n'
-        text += f'\tname: {self.name}\n'
-
-        if not 'planeswalker' in types[0].lower():
-            text += f'\trule_text: {oracle.replace('} {', '').replace('{','').replace('}', '')}\n'
-        else:
-            text += parsePlaneswalker(self.oracle_text)
-        text += f'\tsuper_type: {types[0]}\n'
-        if self.image_path:
-            text += f'\timage: {self.image_path}\n'
-        else:
-            text += '\timage: picture\n'
-        if len(types) > 1:
-            text += f'\tsub_type: {types[1]}\n'
-        if self.power:
-            text += f'\tpower: {self.power}\n'
-        if self.toughness:
-            text += f'\ttoughness: {self.toughness}\n'
-        if self.loyalty:
-            text += f'\tloyalty: {self.loyalty}\n'
-        if self.flavor_text:
-            print('flavortown')
-            text += f'\tflavor_text: {flavor}\n'
-        if self.mana_cost:
-            text += f'\tcasting_cost: {self.mana_cost.replace("} {", "").replace("{","").replace("}", "")}\n'
-
-        return text[:-1]
     
-
-    def parsePlaneswalker(text):
+    def parsePlaneswalker(self,text):
         loyaltyRE = r'[\+\-]*[0-9]+:'
         parsed = ''
         lines = text.split('\n')
@@ -110,3 +73,43 @@ class Card(QListWidgetItem):
             lineCounter+=1
 
         return parsed
+
+
+    def genMSE(self):
+        types = self.type_line.split("-")
+        angry = self.oracle_text.replace('\n', '\n\t\t')
+        oracle = self.oracle_text if not '\n' in self.oracle_text else f"\n\t\t{angry}"
+        flavor = self.flavor_text
+
+        text = 'card:\n'
+        if 'planeswalker' in types[0].lower():
+            text += '\tstylesheet: m15-mainframe-planeswalker\n\tstylesheet_version: 2024-01-05\n'
+        text += f'\tname: {self.name}\n'
+
+        if not 'planeswalker' in types[0].lower():
+            text += f'\trule_text: {oracle.replace('} {', '').replace('{','').replace('}', '')}\n'
+        else:
+            text += self.parsePlaneswalker(self.oracle_text)
+        text += f'\tsuper_type: {types[0]}\n'
+        if self.image_path:
+            print(self.image_path)
+            text += f'\timage: {self.name.replace(' ', '')}\n'
+        else:
+            text += '\timage: gradient\n'
+        if len(types) > 1:
+            text += f'\tsub_type: {types[1]}\n'
+        if self.power:
+            text += f'\tpower: {self.power}\n'
+        if self.toughness:
+            text += f'\ttoughness: {self.toughness}\n'
+        if self.loyalty:
+            text += f'\tloyalty: {self.loyalty}\n'
+        if self.flavor_text:
+            text += f'\tflavor_text: <i-flavor>{flavor}</i-flavor>\n'
+        if self.mana_cost:
+            text += f'\tcasting_cost: {self.mana_cost.replace("} {", "").replace("{","").replace("}", "")}\n'
+
+        return text[:-1]
+    
+
+    

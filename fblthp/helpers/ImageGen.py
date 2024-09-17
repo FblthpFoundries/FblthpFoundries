@@ -273,7 +273,7 @@ class ImageGenWidget(QWidget):
                     self.threads.append(thread)
         else:
             # Sequential image generation for SD3ImageGenerator
-            for card in self.cards:
+            for card in self.cards_uuid_dict.values():
                 if not card.image_path:
                     try:
                         card.image_path = self.image_generator.generate_image(card)

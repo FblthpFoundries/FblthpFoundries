@@ -1,6 +1,7 @@
-from zipfile import ZipFile
+from zipfile import ZipFile, ZIP_DEFLATED
 from datetime import datetime
 from pathlib import Path
+from .magicCard import Card
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = BASE_DIR 
 
@@ -41,7 +42,7 @@ fluff = """
 \tmainframe_image_2:
 """
 
-def createMSE(name, cards):
+def createMSE(name: str, cards: list[Card]):
     now = datetime.now()
     date = now.strftime('%Y-%m-%d %H:%M:%S')
     mse = preamble
@@ -54,6 +55,11 @@ def createMSE(name, cards):
     with open(f'{BASE_DIR}/helpers/toZip/set', 'w') as f:
         f.write(mse)
 
-    with ZipFile(f'{BASE_DIR}/{name}.mse-set', 'w') as zip:
-        zip.write(f'{BASE_DIR}/helpers/toZip/set')
-        zip.write(f'{BASE_DIR}/helpers/toZip/fblthpAI.mse-symbol')
+    with ZipFile(f'{BASE_DIR}/{name}.mse-set', 'w', ZIP_DEFLATED) as zip:
+        zip.write(f'{BASE_DIR}/helpers/toZip/set','set')
+        zip.write( f'{BASE_DIR}/helpers/toZip/fblthpAI.mse-symbol', 'fblthpAI.mse-symbol')
+        zip.write(f'{BASE_DIR}/images/downloaded/gradient.png', 'gradient')
+
+        for card in cards:
+            if card.image_path:
+                zip.write(card.image_path, card.name.replace(' ',''))

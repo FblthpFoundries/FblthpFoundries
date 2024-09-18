@@ -90,7 +90,9 @@ class CardListWidget(QWidget):
 
         else:
             self.disableButtons(False)
-
+    def load_cube_settings(self, file):
+        if file:
+            self.card_generator.load_cube_settings(file)
     def updateProgress(self, value):
         self.progress.setValue(value)
     def onGenerationFinished(self, cards):

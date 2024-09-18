@@ -50,6 +50,7 @@ class MainWindow(QWidget):
         self.settings_widget.dalle_wide_changed.connect(self.image_gen_widget.update_dalle_wide)
         self.settings_widget.dalle_hd_changed.connect(self.image_gen_widget.update_dalle_hd)
         self.settings_widget.dalle_additional_prompt_changed.connect(self.image_gen_widget.update_dalle_add_text)
+        self.settings_widget.cube_settings_file_changed.connect(self.card_list_widget.load_cube_settings)
 
         self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
         self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')

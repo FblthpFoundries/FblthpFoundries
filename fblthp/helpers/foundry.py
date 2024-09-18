@@ -17,7 +17,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = BASE_DIR / "helpers" / "prompts"
 IMAGE_DIR = BASE_DIR / "images" / "downloaded"
-
+NONSENSE_DIR = BASE_DIR / "nonsense"
 # CARD GENERATORS
 
 class BaseCardGenerator():
@@ -28,7 +28,9 @@ class BaseCardGenerator():
         Creates and returns a list of {number} cards in dictionary form
         '''
         pass
-    def reroll():
+    def reroll(self):
+        pass
+    def load_card_settings(self, path):
         pass
     
 class ChatGPTCardGenerator(BaseCardGenerator):
@@ -36,9 +38,14 @@ class ChatGPTCardGenerator(BaseCardGenerator):
         super().__init__()
         from .constants import API_KEY
         openai.api_key = API_KEY
-        self.model = model
-    
+
+        self.cube_yml = PROMPTS_DIR / "defaults.yml"
+
+        self.update_card_settings()
+
     def create_cards(self, number, update_function=None):
+        self.update_card_settings()
+
         cards = []
         i = 0
         with ThreadPoolExecutor() as executor:
@@ -59,7 +66,15 @@ class ChatGPTCardGenerator(BaseCardGenerator):
             success, card = self.generate_card_gpt()
         return card
         
-    
+    def load_card_settings(self, path):
+        self.cube_yml = path
+
+    def update_card_settings(self):
+        if self.cube_yml:
+            import yaml
+            with open(self.cube_yml, 'r') as f:
+                data = yaml.safe_load(f)
+
     def generate_card_gpt(self):
         
 

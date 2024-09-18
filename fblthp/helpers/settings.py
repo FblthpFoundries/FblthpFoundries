@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget,QVBoxLayout,QGroupBox,  QScrollArea,QTextEdit, 
-    QFormLayout, QCheckBox, QSpinBox, QComboBox,  QLabel, 
+    QFormLayout, QCheckBox, QSpinBox, QComboBox,  QLabel, QFileDialog, QPushButton
 )
 from PyQt6.QtCore import  pyqtSignal, QSettings
 
@@ -10,6 +10,7 @@ class SettingsWidget(QWidget):
     dalle_hd_changed = pyqtSignal(bool)
     dalle_wide_changed = pyqtSignal(str)
     dalle_additional_prompt_changed = pyqtSignal(str)
+    cube_settings_file_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -84,8 +85,21 @@ class SettingsWidget(QWidget):
         # GPT-4o-mini specific settings
         self.theme_seeding = QCheckBox('Theme Seeding')
         self.sanity_check = QCheckBox('Sanity Check')
+        # Add a button to open the file dialog
+        self.cube_settings_file_button = QPushButton("Select Cube Settings File")
+        self.cube_settings_file_button.clicked.connect(self.select_cube_settings_file)
 
-        self.gpt4o_mini_group = [self.theme_seeding, self.sanity_check]
+        # Display the selected file path
+        self.cube_settings_file_label = QLabel("No file selected")
+
+        self.gpt4o_mini_group = [self.theme_seeding, self.sanity_check, self.cube_settings_file_button, self.cube_settings_file_label]
+
+    
+        
+        card_text_layout.addRow(self.cube_settings_file_button)
+        card_text_layout.addRow(self.cube_settings_file_label)
+
+
         for widget in self.gpt4o_mini_group:
             widget.setVisible(False)  # Hidden by default, shown based on selection
 
@@ -155,6 +169,12 @@ class SettingsWidget(QWidget):
 
         # Emit the signal with the text as an argument
         self.dalle_additional_prompt_changed.emit(text)
+    def select_cube_settings_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Cube Settings File", "", "All Files (*)")
+        if file_path:
+            self.cube_settings_file_label.setText(file_path)
+            self.cube_settings_file_changed.emit(file_path)
+            self.save_setting("text_gen/cube_settings_file", file_path)
     def add_card_rendering_settings(self, layout):
         card_template_group = QGroupBox("Card Rendering")
         card_template_layout = QFormLayout()
@@ -187,6 +207,10 @@ class SettingsWidget(QWidget):
         index = self.text_gen_option.findText(text_gen_option)
         if index >= 0:
             self.text_gen_option.setCurrentIndex(index)
+        
+        # Load cube settings file
+        cube_settings_file = settings.value("text_gen/cube_settings_file", "")
+        self.cube_settings_file_label.setText(cube_settings_file)
 
         # Load image generation settings
         image_gen_option = settings.value("image_gen/option", "SD3")

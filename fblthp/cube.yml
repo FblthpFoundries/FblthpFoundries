@@ -2,18 +2,14 @@
 
 # General generation rules
 generation_rules:
-  cards_per_batch: 20               # How many cards to generate in each batch
+  model: "gpt-4o-mini"
+  #cards: 40               # How many cards to generate in each batch
 
+  theme_step: true  # Whether to do a theme selection step for gpt-4o-mini cards
+  theme_override: ''             # Whether to override the theme of the cards with a custom choice ('' if not)
 
-  theme_gpt_seeding: true
-
-  theme_override: false             # Whether to override the theme of the cards with a custom config
-  theme_override_config: nonexistent.yml # Path to the custom theme config file
-
-  sanity_check: true                # Whether to perform a sanity check on generated cards
-
-  custom_art_generation: true       # Enable custom art generation for each card
-  art_generator: DALL-E             # Specify the art generator to use (DALL-E or SD3)
+  sanity_check: true                # Whether to perform a sanity check on generated cards for basic game rules.
+  enable_synergy: false               # Whether to perform a synergy check on generated cards. (TODO)
 
 
 
@@ -21,7 +17,13 @@ generation_rules:
 cards:
 
   generate_flavor_text: true         # Whether to generate flavor text for cards
-  max_flavor_text_length: 100        # Maximum length for flavor text on a card (measuered in tokens)
+
+  # Keyword ability generation
+  abilities:
+    generate_custom_abilities: true    # Whether to generate custom keyword abilities and use them in the cube
+    ability_file: abilities.json        # Output file containing keyword abilities
+    ability_count: 10                   # Number of custom abilities to generate
+    ability_weight: 0.3                  # Chance for determining the likelihood of a custom ability appearing on a card
 
   rarity_weights:                    # Weights for determining card rarity
     common: 10                       
@@ -31,12 +33,12 @@ cards:
   
   mana:
     color_count_distribution: [  # Distribution of the number of colors in a card
-      0.08, 
-      0.74, 
-      0.11, 
-      0.06, 
-      0.005, 
-      0.005
+      0.08,   # 0
+      0.74,   # 1
+      0.11,   # 2
+      0.06,   # 3
+      0.005,  # 4 
+      0.005   # 5
       ]
     cmc_distribution: [         # Distribution of converted mana cost
       0.004975, 
@@ -77,22 +79,14 @@ cards:
     other_weight: 80                  # Weight for determining the likelihood of a non-equipment, non-vehicle artifact
     
     override_color_weights:                   # Weights for determining the color of an artifact
-      colorless: 58                  
-      white: 8                      
-      blue: 8                       
-      black: 8                      
-      red: 8                       
-      green: 8
-      multicolor: 2
+      colorless: .75                  # Chance for the artifact to be colorless
+  enchantment:
+    aura_weight: 10                  # Weight for determining the likelihood of an aura enchantment
+    curse_weight: 2                 # Weight for determining the likelihood of a curse enchantment
+    other_weight: 88                  # Weight for determining the likelihood of a non-aura, non-curse enchantment
+    
+    override_color_weights:                   # Weights for determining the color of an enchantment
+      colorless: 0.0               # Chance for the enchantment to be colorless
                          
 
-# Keyword ability generation
-abilities:
-  regenerate_custom_abilities: true    # Whether to generate custom keyword abilities
-  load_abilities: true                # Whether to load keyword abilities from a list
 
-  ability_file: abilities.json        # File containing keyword abilities 
-
-# Synergy and balance
-synergy_settings:
-  enable_synergy: false               # Enable synergy checks for generated cards

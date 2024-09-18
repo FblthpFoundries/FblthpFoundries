@@ -167,27 +167,27 @@ class Card(QListWidgetItem):
         text += f'\tname: {self.name}\n'
 
         if not 'planeswalker' in types[0].lower():
-            text += f'\trule_text: {oracle.replace('} {', '').replace('{','').replace('}', '')}\n'
+            text += f"\trule_text: {oracle.replace('} {', '').replace('{','').replace('}', '')}\n"
         else:
             text += self.parsePlaneswalker(self.oracle_text)
-        text += f'\tsuper_type: {types[0]}\n'
+        text += f"\tsuper_type: {types[0]}\n"
         if self.image_path:
             print(self.image_path)
-            text += f'\timage: {self.name.replace(' ', '')}\n'
+            text += f"\timage: {self.name.replace(' ', '')}\n"
         else:
             text += '\timage: gradient\n'
         if len(types) > 1:
-            text += f'\tsub_type: {types[1]}\n'
+            text += f"\tsub_type: {types[1]}\n"
         if self.power:
-            text += f'\tpower: {self.power}\n'
+            text += f"\tpower: {self.power}\n"
         if self.toughness:
-            text += f'\ttoughness: {self.toughness}\n'
+            text += f"\ttoughness: {self.toughness}\n"
         if self.loyalty:
-            text += f'\tloyalty: {self.loyalty}\n'
+            text += f"\tloyalty: {self.loyalty}\n"
         if self.flavor_text:
-            text += f'\tflavor_text: <i-flavor>{flavor}</i-flavor>\n'
-        if self.mana_cost and (not self.mana_cost == 'nan'):
-            text += f'\tcasting_cost: {self.mana_cost.replace("} {", "").replace("{","").replace("}", "")}\n'
+            text += f"\tflavor_text: <i-flavor>{flavor}</i-flavor>\n"
+        if self.mana_cost:
+            text += f"\tcasting_cost: {self.mana_cost.replace('} {', '').replace('{','').replace('}', '')}\n"
 
         return text[:-1]
     

@@ -87,7 +87,7 @@ class MainWindow(QWidget):
     def toXML(self, fileName):
         root = minidom.Document()
 
-        xml = root.createElement('cockatrice_cardbase')
+        xml = root.createElement('cockatrice_carddatabase')
         xml.setAttribute('version', '4')
         root.appendChild(xml)
 

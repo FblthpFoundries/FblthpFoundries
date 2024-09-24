@@ -14,7 +14,7 @@ We offer two pathways for generating card text:
 - **Fine-tuned GPT-2 Model:** Trained on a comprehensive corpus of existing MTG cards, this model employs custom tokenization and XML-like preprocessing to accurately generate card text. The output is parsed and forwarded to the next stage.
   - *Cost per card: $0* (assuming local execution)
 
-- **Urza's Encoder-Decoder Transformer** (in development) Trained on a mixture of existing MTG cards and synthetic ones, this model employs custom tokenization, unmasked self-attention, and initial theme prompt encoding to produce card text.
+- **Urza's Transformer Encoder-Decoder** (in development) Trained on a mixture of existing MTG cards and synthetic ones, this model employs custom tokenization, unmasked self-attention, and initial theme prompt encoding to produce card text.
   - *Cost per card: $0* (assuming local execution)
   
 

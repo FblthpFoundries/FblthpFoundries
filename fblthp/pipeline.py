@@ -45,6 +45,8 @@ class FblthpFoundries:
         self.gpt_model = "gpt-4o-mini"
         self.original_wd = os.getcwd()
         self.outfolder = os.path.join(self.original_wd, "out")
+        if not os.path.exists(self.outfolder):
+            os.mkdir(self.outfolder)
         self.runfolder = f"run{self.get_next_run_number(self.outfolder)}"
         self.runfolder = os.path.join(self.outfolder, self.runfolder)
         self.resource_folder = os.path.join(self.runfolder, "resources")

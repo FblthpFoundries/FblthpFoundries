@@ -34,6 +34,7 @@ class FblthpTransformerModel(nn.Module):
         self.sm = nn.LogSoftmax(dim=-1)
 
         self.init_weights()
+        print(f"Loaded FblthpTransformerModel! ({self.get_model_size_in_megabytes(self)}MB)")
 
     def init_weights(self) -> None:
         initrange = 0.1
@@ -44,7 +45,17 @@ class FblthpTransformerModel(nn.Module):
         self.linear2.bias.data.zero_()
         self.linear3.weight.data.uniform_(-initrange, initrange)
         self.linear3.weight.data.uniform_(-initrange, initrange)
+    def get_model_size_in_megabytes(self):
+        # Get the number of parameters in the model
+        param_size = sum(p.numel() for p in self.parameters())
 
+        # Each parameter typically takes 4 bytes (float32)
+        param_size_in_bytes = param_size * 4
+
+        # Convert from bytes to megabytes
+        param_size_in_megabytes = param_size_in_bytes / (1024 ** 2)
+
+        return param_size_in_megabytes
     def forward(self, src: Tensor, src_mask: Tensor = None) -> Tensor:
         """
         Arguments:

@@ -213,8 +213,10 @@ class LocalCardGenerator(BaseCardGenerator):
         from .secret_tokens import hugging_face_token
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained('gpt2')
+        print(f"Loaded tokenizer")
         self.model = AutoModelForCausalLM.from_pretrained('FblthpAI/magic_model', token = hugging_face_token())
-        self.device = 'cuda'
+        print(f"Loaded model ({self.get_model_size_in_megabytes()}MB)")
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
         self.model.to(self.device)
         self.cards = []
         self.batchSize = 10
@@ -228,7 +230,16 @@ class LocalCardGenerator(BaseCardGenerator):
         self.cards = self.cards[number:]
 
         return toReturn
-    
+    def get_model_size_in_megabytes(self):
+        # Get the number of parameters in the model
+        param_size = sum(p.numel() for p in self.model.parameters())
+
+        # Each parameter typically takes 4 bytes (float32)
+        param_size_in_bytes = param_size * 4
+
+        # Convert from bytes to megabytes
+        param_size_in_megabytes = param_size_in_bytes / (1024 ** 2)
+        return int(param_size_in_megabytes)
     def reroll(self):
         if len(self.cards) > 0:
             return self.cards.pop()

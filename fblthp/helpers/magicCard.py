@@ -47,7 +47,7 @@ class Card(QListWidgetItem):
                 case 'name':
                     self.name = value
                 case 'rule_text':
-                    self.oracle_text = value
+                    self.oracle_text = value.replace('<kw-0>', '').replace('</kw-0>', '')
                 case 'image':
                     self.image_path = saveMethod(value)
                 case 'super_type':
@@ -200,7 +200,7 @@ class Card(QListWidgetItem):
     def genMSE(self):
         types = self.type_line.split("-")
         angry = self.oracle_text.replace('\n ', '\n\t\t')
-        oracle = self.oracle_text if not '\n' in self.oracle_text else f"\n\t\t{angry}"
+        oracle = f'<kw-0>{self.oracle_text}</kw-0>' if not '\n' in self.oracle_text else f"\n\t\t<kw-0>{angry}</kw-0>"
         flavor = self.flavor_text
         if flavor and '\n' in flavor:
             flavor = flavor.replace('\n ', '\n\t\t')

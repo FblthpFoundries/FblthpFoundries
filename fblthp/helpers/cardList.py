@@ -104,8 +104,9 @@ class CardListWidget(QWidget):
             self.list.addItem(c)
     def get_cards(self):
         return self.uuid_dict
-
-        
+    
+    def addCard(self, card):
+        self.list.addItem(card)
 
     def reroll(self):
         curr_row = self.list.currentRow()

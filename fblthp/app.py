@@ -45,6 +45,7 @@ class MainWindow(QWidget):
         self.file_widget = FileWidget()
         self.file_widget.saveSignal.connect(self.toXML)
         self.file_widget.saveSignal.connect(self.toMSE)
+        self.file_widget.addCardSignal.connect(self.card_list_widget.addCard)
         self.settings_widget.text_gen_option_changed.connect(self.card_list_widget.swap_text_generator)
         self.settings_widget.image_gen_option_changed.connect(self.image_gen_widget.swap_image_generator)
         self.settings_widget.dalle_wide_changed.connect(self.image_gen_widget.update_dalle_wide)

@@ -2,12 +2,12 @@ from PyQt6.QtWidgets import QListWidgetItem
 import uuid, re
 
 class Card(QListWidgetItem):
-    def __init__(self, cardDict):
+    def __init__(self, cardDict: dict, text:str = None, saveMethod = None):
         super().__init__()
         self.uuid = uuid.uuid4()
-        self.name = cardDict['name']
-        self.oracle_text = cardDict['oracle_text'].replace('<', '{').replace('>', '}')
-        self.type_line = cardDict['type_line']
+        self.name = cardDict['name'] if 'name' in cardDict else None
+        self.oracle_text = cardDict['oracle_text'].replace('<', '{').replace('>', '}') if 'oracle_text' in cardDict else None
+        self.type_line = cardDict['type_line'] if 'type_line' in cardDict else None
         self.mana_cost = cardDict['mana_cost'].replace('<', '{').replace('>', '}') if 'mana_cost' in cardDict else None
         self.flavor_text = cardDict['flavor_text'] if 'flavor_text' in cardDict else None
         self.power = cardDict['power'] if 'power' in cardDict else None
@@ -21,9 +21,53 @@ class Card(QListWidgetItem):
         self.image_path = cardDict['image_path'] if 'image_path' in cardDict else None
         self.cmc = 0
         self.colors = ''
+
+        if text and saveMethod:
+            self.init2ElectricBoogaloo(text, saveMethod)
+
         self.findCMC()
 
         self.setText(f"{self.name}, {self.type_line}, {self.mana_cost if not self.mana_cost == 'nan' else ''}:\n {self.oracle_text}\n{self.power + '/' + self.toughness if self.power else ''}{self.loyalty if self.loyalty else ''}")
+
+    def init2ElectricBoogaloo(self, text: str, saveMethod):
+        super().__init__()
+        text = text.replace('\\r\\n\\t\\t', '\n ')
+        elements = text.split('\\r\\n\\t')[1:]
+        superType, subType = None, None
+
+        for element in elements:
+            pair = element.split(': ')
+            if len(pair) < 2:
+                continue
+            name, value = pair[0], pair[1]
+            if len(value) > 0 and value[0] == '\n':
+                value = value[1:]
+            
+            match name:
+                case 'name':
+                    self.name = value
+                case 'rule_text':
+                    self.oracle_text = value
+                case 'image':
+                    self.image_path = saveMethod(value)
+                case 'super_type':
+                    superType = value
+                case 'sub_type':
+                    subType = value
+                case 'toughness':
+                    self.toughness = value
+                case 'power':
+                    self.power = value
+                case 'loyalty':
+                    self.loyalty = value
+                case 'flavor_text':
+                    self.flavor_text = value.replace('<i-flavor>', '').replace('</i-flavor>', '')
+                case 'casting_cost':
+                    self.mana_cost = value
+
+        self.type_line = superType if not subType else f'{superType} - {subType}'
+
+
 
     def findCMC(self):
         pip = r'\{.*?\}'

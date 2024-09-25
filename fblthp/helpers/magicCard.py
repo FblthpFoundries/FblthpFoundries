@@ -155,11 +155,11 @@ class Card(QListWidgetItem):
 
     def genMSE(self):
         types = self.type_line.split("-")
-        angry = self.oracle_text.replace('\n', '\n\t\t')
+        angry = self.oracle_text.replace('\n ', '\n\t\t')
         oracle = self.oracle_text if not '\n' in self.oracle_text else f"\n\t\t{angry}"
         flavor = self.flavor_text
         if flavor and '\n' in flavor:
-            flavor = flavor.replace('\n', '\n\t\t')
+            flavor = flavor.replace('\n ', '\n\t\t')
 
         text = 'card:\n'
         if 'planeswalker' in types[0].lower():
@@ -185,7 +185,7 @@ class Card(QListWidgetItem):
         if self.loyalty:
             text += f"\tloyalty: {self.loyalty}\n"
         if self.flavor_text:
-            text += f"\tflavor_text: <i-flavor>{flavor}</i-flavor>\n"
+            text += f"\tflavor_text: \n\t\t<i-flavor>{flavor}</i-flavor>\n"
         if self.mana_cost:
             text += f"\tcasting_cost: {self.mana_cost.replace('} {', '').replace('{','').replace('}', '')}\n"
 

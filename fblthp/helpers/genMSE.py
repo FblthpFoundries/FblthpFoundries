@@ -5,8 +5,7 @@ from .magicCard import Card
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPTS_DIR = BASE_DIR 
 
-preamble = """
-mse_version: 2.0.2
+preamble = """mse_version: 2.0.2
 game: magic
 game_version: 2020-04-25
 stylesheet: m15-altered

@@ -31,23 +31,26 @@ class Card(QListWidgetItem):
 
     def init2ElectricBoogaloo(self, text: str, saveMethod):
         super().__init__()
-        text = text.replace('\\r\\n\\t\\t', '\n ')
-        elements = text.split('\\r\\n\\t')[1:]
+        xmlRE = r'(<.*?>|</.*?>)'
+        text = text.replace('\r\n\t\t', '\n ')
+        text = re.sub(xmlRE, '', text)
+        print(text)
+        elements = text.split('\r\n\t')
         superType, subType = None, None
 
         for element in elements:
-            pair = element.split(': ')
-            if len(pair) < 2:
+            colon = element.find(':')
+            if colon == len(element) -1:
                 continue
-            name, value = pair[0], pair[1]
-            if len(value) > 0 and value[0] == '\n':
-                value = value[1:]
+            name, value = element[:colon], element[colon + 1:] 
+            if len(value) > 1 and value[0:2] == ' \n':
+                value = value[2:]
             
             match name:
                 case 'name':
                     self.name = value
                 case 'rule_text':
-                    self.oracle_text = value.replace('<kw-0>', '').replace('</kw-0>', '')
+                    self.oracle_text = value
                 case 'image':
                     self.image_path = saveMethod(value)
                 case 'super_type':
@@ -61,9 +64,9 @@ class Card(QListWidgetItem):
                 case 'loyalty':
                     self.loyalty = value
                 case 'flavor_text':
-                    self.flavor_text = value.replace('<i-flavor>', '').replace('</i-flavor>', '')
+                    self.flavor_text = value
                 case 'casting_cost':
-                    self.mana_cost = value
+                    self.mana_cost = self.rePip(value)
 
         self.type_line = superType if not subType else f'{superType} - {subType}'
 
@@ -72,9 +75,10 @@ class Card(QListWidgetItem):
     def findCMC(self):
         pip = r'\{.*?\}'
         num = r'[0-9]+'
-        colors = r'[WUBRG]|{[WUBRG]/[WUBRGP]}'
+        colors = r'[WUBRG]|[WUBRG]/[WUBRGP]'
+        if not self.mana_cost:
+            return
         for p in re.findall(pip, self.mana_cost):
-            print(p)
             if re.search(num, p):
                 self.cmc += int(p[1:-1])
             else:
@@ -84,6 +88,14 @@ class Card(QListWidgetItem):
                         if not col in self.colors and (not col == 'P'):
                             self.colors += col
 
+    def rePip(self, mc):
+        print(mc)
+        manaPatterns = [r'([0-9]+)', r'([WUBRG])', r'([WUBRG]/[WUBRGP])']
+        for pattern in manaPatterns:
+            mc = re.sub(pattern, r'{\1}', mc)
+        print(mc)
+
+        return mc
 
     def set_image_path(self, path):
         self.image_path = path

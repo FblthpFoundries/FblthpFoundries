@@ -1,7 +1,9 @@
+from typing import IO
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QHBoxLayout, QFileDialog
 )
 from PyQt6.QtCore import pyqtSignal
+import re
 from zipfile import ZipFile
 from pathlib import Path
 from .magicCard import Card
@@ -49,10 +51,37 @@ class FileWidget(QWidget):
                 if not 'set' in z.namelist():
                     return
                 def saveImage(img):
+                    if not img in z.namelist():
+                        return None
                     z.extract(img, IMAGE_DIR)
                     return IMAGE_DIR / img
-                cards = str(z.open('set').read()).split('card:')[1:]
+                cards = self.seperateCards(z.open('set'))
                 for card in cards:
                     self.addCardSignal.emit(Card({}, card, saveImage))
+
+    def seperateCards(self, file:IO[bytes]) -> list[str]:
+        cardMatch = r'^card:'
+        cards = []
+        add = False
+
+        card = ''
+
+        for line in file:
+            line = line.decode('utf-8')
+            if re.search(cardMatch, line):
+                add = not add
+                if not card == '':
+                    cards.append(card[1:])
+                    card = ''
+            elif add:
+                card += line
+
+        print(cards)
+
+        return cards
+
+            
+
+
 
             

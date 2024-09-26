@@ -32,11 +32,15 @@ class Card(QListWidgetItem):
     def init2ElectricBoogaloo(self, text: str, saveMethod):
         super().__init__()
         xmlRE = r'(<.*?>|</.*?>)'
+        planesCost = r'loyalty_cost_[0-9]+'
+        planesText = r'level_[0-9]+_text'
         text = text.replace('\r\n\t\t', '\n ')
         text = re.sub(xmlRE, '', text)
         print(text)
         elements = text.split('\r\n\t')
         superType, subType = None, None
+
+        planeswalkerText = {}
 
         for element in elements:
             colon = element.find(':')
@@ -45,6 +49,10 @@ class Card(QListWidgetItem):
             name, value = element[:colon], element[colon + 1:] 
             if len(value) > 1 and value[0:2] == ' \n':
                 value = value[2:]
+
+            if re.search(planesCost, name) or re.search(planesText, name):
+                planeswalkerText[name] = value
+                continue
             
             match name:
                 case 'name':
@@ -69,8 +77,20 @@ class Card(QListWidgetItem):
                     self.mana_cost = self.rePip(value)
 
         self.type_line = superType if not subType else f'{superType} - {subType}'
+        
+        if 'Planeswalker' in superType:
+            oracle = ''
+            lineCount = 1
+            while len(planeswalkerText) > 0:
+                if f'loyalty_cost_{lineCount}' in planeswalkerText:
+                    oracle += f'{planeswalkerText[f'loyalty_cost_{lineCount}']}: '
+                    del planeswalkerText[f'loyalty_cost_{lineCount}']
+                if f'level_{lineCount}_text' in planeswalkerText:
+                    oracle += f'{planeswalkerText[f'level_{lineCount}_text']}\n'
+                    del planeswalkerText[f'level_{lineCount}_text']
+                lineCount += 1
 
-
+            self.oracle_text = oracle[:-1]
 
     def findCMC(self):
         pip = r'\{.*?\}'
@@ -201,9 +221,9 @@ class Card(QListWidgetItem):
             if re.search(loyaltyRE, line):
                 split = line.split(':')
                 parsed += f'\tloyalty_cost_{lineCounter}: {split[0]}\n'
-                parsed += f'\tlevel_{lineCounter}_text: {split[1]}\n'
+                parsed += f'\tlevel_{lineCounter}_text: <margin:130:0:0>{split[1]}</margin:130:0:0>\n'
             else:
-                parsed += f'\tlevel_{lineCounter}_text: {line}\n'
+                parsed += f'\tlevel_{lineCounter}_text: <margin:130:0:0>{line}</margin:130:0:0>\n'
             lineCounter+=1
 
         return parsed
@@ -243,7 +263,10 @@ class Card(QListWidgetItem):
         if self.flavor_text:
             text += f"\tflavor_text: \n\t\t<i-flavor>{flavor}</i-flavor>\n"
         if self.mana_cost:
-            text += f"\tcasting_cost: {self.mana_cost.replace('} {', '').replace('{','').replace('}', '')}\n"
+            if self.mana_cost == 'nan':
+                text += f'\tcasting_cost:\n'
+            else:
+                text += f"\tcasting_cost: {self.mana_cost.replace('} {', '').replace('{','').replace('}', '')}\n"
 
         return text[:-1]
     

@@ -30,7 +30,6 @@ class Card(QListWidgetItem):
         self.setText(f"{self.name}, {self.type_line}, {self.mana_cost if not self.mana_cost == 'nan' else ''}:\n {self.oracle_text}\n{self.power + '/' + self.toughness if self.power else ''}{self.loyalty if self.loyalty else ''}")
 
     def init2ElectricBoogaloo(self, text: str, saveMethod):
-        super().__init__()
         xmlRE = r'(<.*?>|</.*?>)'
         planesCost = r'loyalty_cost_[0-9]+'
         planesText = r'level_[0-9]+_text'

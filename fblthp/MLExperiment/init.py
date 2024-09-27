@@ -36,6 +36,10 @@ for card in cards:
     num  += 1
     if  'Token' in card['type_line'] or 'card_faces' in card:
         continue
+    if not 'paper' in card['games']:
+        continue
+    if 'Hero' in card['type_line'] or 'Plane' in card['type_line'] or 'Card' in card['type_line']:
+        continue
     data = '\n'
     for feature in features:
         if feature not in card:

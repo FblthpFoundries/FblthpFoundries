@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
-from csv2tokens import getCorpus
+from MLExperiment.csv2tokens import getCorpus
 from datasets import load_dataset
 from transformers import DataCollatorForLanguageModeling
 device = 'cuda'

@@ -5,7 +5,7 @@ import math
 import os
 from tempfile import TemporaryDirectory
 from typing import Tuple
-import csv2tokens
+import MLExperiment.csv2tokens as csv2tokens
 import numpy as np
 import torch
 from torch import nn, Tensor, optim

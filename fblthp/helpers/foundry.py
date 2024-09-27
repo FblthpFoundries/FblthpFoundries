@@ -38,7 +38,7 @@ class ChatGPTCardGenerator(BaseCardGenerator):
         super().__init__()
         from .constants import API_KEY
         openai.api_key = API_KEY
-
+        self.model = "gpt-4o-mini"
         self.cube_yml = PROMPTS_DIR / "defaults.yml"
 
         self.update_card_settings()

@@ -115,7 +115,7 @@ class SettingsWidget(QWidget):
 
         # Option selector
         self.image_gen_option = QComboBox()
-        self.image_gen_option.addItems(['SD3', 'DALL-E', 'Pixabay', 'Test'])
+        self.image_gen_option.addItems(['SD3', 'DALL-E', 'Pixabay', 'Test', 'Replicate'])
         self.image_gen_option.currentIndexChanged.connect(self.update_image_gen_settings)
         self.image_gen_option.currentTextChanged.connect(self.image_gen_option_changed.emit)
         self.image_gen_option.currentTextChanged.connect(lambda text: self.save_setting("image_gen/option", text))

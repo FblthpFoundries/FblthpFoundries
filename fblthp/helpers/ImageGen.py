@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QImage, QPixmap, QMovie, QFont, QPalette, QColor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize, QSettings
-from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, PixabayImageGenerator, TestImageGenerator
+from helpers.foundry import DALLEImageGenerator, SD3ImageGenerator, PixabayImageGenerator, TestImageGenerator, ReplicateImageGenerator
 import uuid
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
@@ -199,6 +199,8 @@ class ImageGenWidget(QWidget):
             self.image_generator = PixabayImageGenerator()
         elif self.image_gen_name == "DALL-E":
             self.image_generator = DALLEImageGenerator()
+        elif self.image_gen_name == "Replicate":
+            self.image_generator = ReplicateImageGenerator()
         elif self.image_gen_name == "SD3":
             self.image_generator = SD3ImageGenerator()
         elif self.image_gen_name == "Test":
@@ -237,6 +239,8 @@ class ImageGenWidget(QWidget):
             self.image_generator = SD3ImageGenerator()
         elif generator == "DALL-E":
             self.image_generator = DALLEImageGenerator()
+        elif generator == "Replicate":
+            self.image_generator = ReplicateImageGenerator()
         elif generator == "Pixabay":
             self.image_generator = PixabayImageGenerator()
         elif generator == "Test":

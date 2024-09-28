@@ -1,6 +1,7 @@
 import json
 import random
 import openai
+import replicate
 import requests
 import re
 import torch
@@ -36,7 +37,7 @@ class BaseCardGenerator():
 class ChatGPTCardGenerator(BaseCardGenerator):
     def __init__(self, model="gpt-4o-mini"):
         super().__init__()
-        from .constants import API_KEY
+        from constants import API_KEY
         openai.api_key = API_KEY
         self.model = "gpt-4o-mini"
         self.cube_yml = PROMPTS_DIR / "defaults.yml"
@@ -350,6 +351,148 @@ class BaseImageGenerator(QObject):
     def generate_image(self, card):
         pass
 
+class ReplicateImageGenerator(BaseImageGenerator):
+    def __init__(self, size=(1024, 1024), additional_prompt="", text_model="gpt-4o-mini"):
+        super().__init__()
+        
+
+        self.size = size
+        self.go_fast = False
+        self.additional_prompt=""
+        self.text_model = text_model
+    def generate_image(self, card):
+        success, image_prompt = self.generate_image_prompt(card)
+        if success:
+            success, image_data = self.generate_an_image(image_prompt)
+            if success:
+                image = Image.open(BytesIO(image_data))
+
+                # Ensure the image directory exists
+                if not os.path.exists(IMAGE_DIR):
+                    os.mkdir(IMAGE_DIR)
+
+                # Define the full path to save the image
+                image_path = os.path.join(IMAGE_DIR, f"{card.name}_{uuid.uuid4()}.png")
+                image.save(image_path)
+
+                return image_path
+
+            else:
+                return None
+    def generate_images(self, cards):
+        images = []
+        for card in cards:
+            success, image_prompt = self.generate_image_prompt(card)
+            if success:
+                success, image_data = self.generate_an_image(image_prompt)
+                if success:
+                    images.append(image_data)
+                else:
+                    images.append(None)
+            else:
+                images.append(None)
+        return images
+    
+    def generate_image_prompt(self, card, model="gpt-4o-mini", additional_prompt="", max_chars=800):
+        # Send the request to ChatGPT
+        with open(PROMPTS_DIR / "EXTRACTION.txt", "r") as f:
+            prompt = f.read().format(
+                type_line=card.type_line,
+                name=card.name,
+                mana_cost=card.mana_cost,
+                oracle_text=card.oracle_text,
+                power=card.power,
+                toughness=card.toughness,
+                loyalty=card.loyalty,
+                flavor_text=card.flavor_text,
+                rarity=card.rarity,
+                theme=card.theme,
+                code_adds = "",
+                additional_prompt=self.additional_prompt,
+                max_chars=max_chars
+            )
+        success, out = self.ask_llama(prompt)
+        image_prompt = out["prompt"]
+        return True, image_prompt
+    def generate_an_image(self, prompt):
+        import constants
+        os.environ["REPLICATE_API_KEY"] = constants.REPLICATE_API_KEY
+        prompt += "\n Use a highly detailed and imaginative fantasy art style."
+        output = replicate.run(
+            "black-forest-labs/flux-schnell",
+            input={
+                "prompt": prompt,
+                "go_fast": self.go_fast,
+                "num_outputs": 1,
+                "aspect_ratio": "3:2",
+                "output_format": "png",
+                "output_quality": 80
+            }
+        )
+        image_url = output[0]
+        # Download the image
+        image_response = requests.get(image_url)
+        try:
+            image_response.raise_for_status()
+            return True, image_response.content
+        except requests.HTTPError:
+            return False, None
+
+        
+
+    # Helper function to interact with the GPT model (make sure prompts ask for JSON return)
+    def ask_chatbot(self, prompt, header="You are an expert in generating Magic: The Gathering cards."):
+        response = openai.chat.completions.create(
+            model=self.text_model,
+            messages=[
+                {"role": "system", "content": header},
+                {"role": "user", "content": prompt}
+            ],
+        )
+        resp = response.choices[0].message.content.strip()
+        if '```' in resp:
+            resp = resp.split('```')[1]
+        if resp[:4] == "json":
+            resp = resp[4:]
+        #print(f"CHATGPT: {resp}")
+        return True, json.loads(resp)
+    def ask_llama(self, prompt, header="You are an expert in generating Magic: The Gathering cards."):
+        print(prompt)
+        import constants
+        os.environ["REPLICATE_API_KEY"] = constants.REPLICATE_API_KEY
+        returned = ""
+        for event in replicate.stream(
+            "meta/meta-llama-3-8b-instruct",
+            input={
+                "top_k": 0,
+                "top_p": 0.9,
+                "prompt": prompt,
+                "max_tokens": 512,
+                "min_tokens": 0,
+                "temperature": 0.6,
+                "system_prompt": header,
+                "length_penalty": 1,
+                "stop_sequences": "<|end_of_text|>,<|eot_id|>",
+                "prompt_template": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                "presence_penalty": 1.15,
+                "log_performance_metrics": False
+            },
+        ):
+            returned += str(event)
+        resp = returned.strip()
+        print(resp)
+        if '```' in resp:
+            resp = resp.split('```')[1]
+        if resp[:4] == "json":
+            resp = resp[4:]
+        resp = resp.split('{')[1]
+        resp = resp.split('}')[0]
+        resp = '{' + resp + '}'
+        
+        #print(f"CHATGPT: {resp}")
+        return True, json.loads(resp)
+
+
 class DALLEImageGenerator(BaseImageGenerator):
     def __init__(self, quality="standard", size="1024x1024", additional_prompt="", text_model="gpt-4o-mini"):
         super().__init__()
@@ -599,12 +742,15 @@ class TestImageGenerator(BaseImageGenerator):
         return image_path
         # Return the path to the saved image
 if __name__ == "__main__":
+    
     import cv2
     cardgenerator = ChatGPTCardGenerator()
     cards = cardgenerator.create_cards(1)
     #print(" PRINTING CARDS!!!!!")
-    #[print(c) for c in cards]
-    imagegenerator = DALLEImageGenerator()
+    [print(c) for c in cards]
+    from magicCard import Card
+    cards = [Card(c) for c in cards]
+    imagegenerator = ReplicateImageGenerator()
     images = imagegenerator.generate_images(cards)
     for img in images:
         if img:

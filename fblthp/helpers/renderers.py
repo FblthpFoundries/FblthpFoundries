@@ -15,6 +15,10 @@ class BaseRenderer():
     def render_card(self, card, art_path):
         pass
 
+class MSERenderer(BaseRenderer):
+    def __init__(self):
+        super().__init__()
+
 class ProxyshopRenderer(BaseRenderer):
     def __init__(self):
         

@@ -13,6 +13,7 @@ IMAGE_DIR = BASE_DIR.parent / "images" / "downloaded"
 class FileWidget(QWidget):
     saveSignal = pyqtSignal(str)
     addCardSignal = pyqtSignal(Card)
+    cockExport = pyqtSignal(str)
 
     def __init__(self, parent = None):
         super().__init__(parent)
@@ -24,11 +25,20 @@ class FileWidget(QWidget):
         self.saveCards.clicked.connect(self.save)
         self.loadCards = QPushButton('Load Cards')
         self.loadCards.clicked.connect(self.load)
-        self.genArt = QPushButton('Generate Art')
+        self.export = QPushButton('Export to Cockatrice')
+        self.export.clicked.connect(self.exportCards)
 
         layout.addWidget(self.saveCards)
         layout.addWidget(self.loadCards)
-        layout.addWidget(self.genArt)
+        layout.addWidget(self.export)
+
+    def exportCards(self):
+        dialog = QFileDialog(self)
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFiles)
+        dialog.setDirectory('')
+
+        if dialog.exec():
+            return
 
 
 

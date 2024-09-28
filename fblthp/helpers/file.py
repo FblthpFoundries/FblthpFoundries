@@ -58,6 +58,7 @@ class FileWidget(QWidget):
                 return
             
             with ZipFile(files[0], 'r') as z:
+                print(z.namelist())
                 if not 'set' in z.namelist():
                     return
                 def saveImage(img):
@@ -79,14 +80,18 @@ class FileWidget(QWidget):
         for line in file:
             line = line.decode('utf-8')
             if re.search(cardMatch, line):
-                add = not add
+                add = True
                 if not card == '':
                     cards.append(card[1:])
                     card = ''
             elif add:
                 card += line
 
+        if not card == '':
+            cards.append(card[1:])
+
         print(cards)
+        print(len(cards))
 
         return cards
 

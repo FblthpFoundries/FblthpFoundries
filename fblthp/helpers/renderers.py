@@ -89,6 +89,8 @@ class ProxyshopRenderer(BaseRenderer):
         )
         card_layout.template_file = template_path
         card_layout.symbol_svg = BASE_DIR / "images" / "defaults" / f"{card.rarity}.svg"
+        card_layout.symbol_svg = BASE_DIR / "images" / "defaults" / f"supreme rare.svg"
+        
         # Instantiate the template directly
         template_object = BorderlessVectorTemplate(card_layout)
 

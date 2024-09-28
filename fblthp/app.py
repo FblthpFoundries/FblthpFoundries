@@ -41,9 +41,11 @@ class MainWindow(QWidget):
 
 
         self.image_gen_widget = ImageGenWidget(self.card_list_widget)
-        self.rendering_widget = RenderTab(self.card_list_widget)
+        self.rendering_widget = RenderTab()
         self.settings_widget = SettingsWidget()
         self.file_widget = FileWidget()
+        self.rendering_widget.requestCards.connect(self.card_list_widget.serveCards)
+        self.card_list_widget.serveCardsSignal.connect(self.rendering_widget.render)
         self.file_widget.saveSignal.connect(self.toXML)
         self.file_widget.saveSignal.connect(self.toMSE)
         self.file_widget.addCardSignal.connect(self.card_list_widget.addCard)
@@ -53,6 +55,7 @@ class MainWindow(QWidget):
         self.settings_widget.dalle_hd_changed.connect(self.image_gen_widget.update_dalle_hd)
         self.settings_widget.dalle_additional_prompt_changed.connect(self.image_gen_widget.update_dalle_add_text)
         self.settings_widget.cube_settings_file_changed.connect(self.card_list_widget.load_cube_settings)
+        self.settings_widget.card_render_option_changed.connect(self.rendering_widget.changeRenderer)
 
         self.tab_widget.addTab(self.card_list_widget, 'Current Cards')
         self.tab_widget.addTab(self.image_gen_widget, 'Image Generation')

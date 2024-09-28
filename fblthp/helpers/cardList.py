@@ -23,6 +23,7 @@ class WorkerThread(QThread):
         self.finished.emit(cards)
 
 class CardListWidget(QWidget):
+    serveCardsSignal = pyqtSignal(list)
     def __init__(self, supreme_ruler=None):
         super().__init__()
         self.supreme_ruler = supreme_ruler
@@ -106,6 +107,7 @@ class CardListWidget(QWidget):
         return self.uuid_dict
     
     def addCard(self, card):
+        self.uuid_dict[card.uuid] = card
         self.list.addItem(card)
 
     def reroll(self):
@@ -121,6 +123,9 @@ class CardListWidget(QWidget):
             self.list.setCurrentRow(curr_row)
     def edit(self):
         pass
+
+    def serveCards(self):
+        self.serveCardsSignal.emit(self.get_cards().values())
 
     def disableButtons(self, yes):
         for button in self.buttons:

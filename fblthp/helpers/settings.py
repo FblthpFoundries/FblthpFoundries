@@ -11,6 +11,7 @@ class SettingsWidget(QWidget):
     dalle_wide_changed = pyqtSignal(str)
     dalle_additional_prompt_changed = pyqtSignal(str)
     cube_settings_file_changed = pyqtSignal(str)
+    card_render_option_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -182,7 +183,8 @@ class SettingsWidget(QWidget):
 
         # Option selector
         self.card_template_option = QComboBox()
-        self.card_template_option.addItems(['Proxyshop', 'HTML Render'])
+        self.card_template_option.addItems(['Magic Set Editor', 'Proxyshop'])
+        self.card_template_option.currentTextChanged.connect(self.card_render_option_changed.emit)
         self.card_template_option.currentTextChanged.connect(lambda text: self.save_setting("card_render/option", text))
 
         card_template_layout.addRow('Card Rendering Option:', self.card_template_option)

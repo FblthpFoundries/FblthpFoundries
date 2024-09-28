@@ -457,7 +457,6 @@ class ReplicateImageGenerator(BaseImageGenerator):
         #print(f"CHATGPT: {resp}")
         return True, json.loads(resp)
     def ask_llama(self, prompt, header="You are an expert in generating Magic: The Gathering cards."):
-        print(prompt)
         import constants
         os.environ["REPLICATE_API_KEY"] = constants.REPLICATE_API_KEY
         returned = ""
@@ -480,7 +479,6 @@ class ReplicateImageGenerator(BaseImageGenerator):
         ):
             returned += str(event)
         resp = returned.strip()
-        print(resp)
         if '```' in resp:
             resp = resp.split('```')[1]
         if resp[:4] == "json":

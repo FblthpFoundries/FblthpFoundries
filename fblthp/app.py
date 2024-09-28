@@ -8,6 +8,7 @@ import sys
 from helpers.settings import SettingsWidget
 from helpers.cardList import CardListWidget
 from helpers.ImageGen import ImageGenWidget
+from helpers.render_tab import RenderTab
 from helpers.file import FileWidget
 from helpers import genMSE
 from pathlib import Path
@@ -40,7 +41,7 @@ class MainWindow(QWidget):
 
 
         self.image_gen_widget = ImageGenWidget(self.card_list_widget)
-        self.rendering_widget = QWidget()
+        self.rendering_widget = RenderTab(self.card_list_widget)
         self.settings_widget = SettingsWidget()
         self.file_widget = FileWidget()
         self.file_widget.saveSignal.connect(self.toXML)

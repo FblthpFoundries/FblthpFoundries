@@ -11,6 +11,7 @@ fblthp/cube-app/secret_tokens.py
 fblthp/helpers/secret_tokens.py
 fblthp/abilities.json
 fblthp/images/downloaded/*
+fblthp/images/rendered/*
 fblthp/saveTest.mse-set
 fblthp/saveTest.xml
 fblthp/helpers/toZip/set

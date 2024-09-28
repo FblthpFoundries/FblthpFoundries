@@ -507,7 +507,7 @@ class FblthpFoundries:
                 break
 
             self.logger.info(f"Rendering card: {card_dict['name']}")
-            from helpers.render import render_card
+            from fblthp.helpers.render_tab import render_card
 
             render_card(card_dict, image_path)
 

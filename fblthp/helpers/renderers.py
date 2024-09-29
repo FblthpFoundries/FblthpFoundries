@@ -25,7 +25,8 @@ class ProxyshopRenderer(BaseRenderer):
         output["name"] = card.name
         output["lang"] = "en"
         output["layout"] = "normal" #TODO: Fix planeswalkers since they will probably break here
-        output["mana_cost"] = card.mana_cost
+        print(card.mana_cost)
+        output["mana_cost"] = card.mana_cost.replace(" ", "")
         output["type_line"] = card.type_line
         output["oracle_text"] = re.sub(r'\n+', '\n', card.oracle_text)
         if card.power:
@@ -69,8 +70,6 @@ class ProxyshopRenderer(BaseRenderer):
         # Define the Scryfall data for your card
         scryfall_data = self.scryfall_markup(card)
 
-        print(scryfall_data)
-
         # Load the path to your card's image file
         art_file_path = Path(art_path)  # Adjust the path as needed
 
@@ -89,7 +88,7 @@ class ProxyshopRenderer(BaseRenderer):
         )
         card_layout.template_file = template_path
         card_layout.symbol_svg = BASE_DIR / "images" / "defaults" / f"{card.rarity}.svg"
-        card_layout.symbol_svg = BASE_DIR / "images" / "defaults" / f"supreme rare.svg"
+        #card_layout.symbol_svg = BASE_DIR / "images" / "defaults" / f"supreme rare.svg"
         
         # Instantiate the template directly
         template_object = BorderlessVectorTemplate(card_layout)

@@ -331,6 +331,8 @@ class LocalCardGenerator(BaseCardGenerator):
             toughness = re.search(toughness_pattern, card_match)
             card['toughness'] = toughness.group(1).strip() if toughness else None
             
+            card["rarity"] = random.choices(["common", "uncommon", "rare", "mythic rare"], [0.1, 0.25, 0.5, 0.15])[0]
+            
             loyalty = re.search(loyalty_pattern, card_match)
             card['loyalty'] = loyalty.group(1).strip() if loyalty else None
             
@@ -471,6 +473,7 @@ class ReplicateImageGenerator(BaseImageGenerator):
                 "temperature": 0.6,
                 "system_prompt": header,
                 "length_penalty": 1,
+                "seed": random.randint(0, 2**32 - 1),
                 "stop_sequences": "<|end_of_text|>,<|eot_id|>",
                 "prompt_template": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
                 "presence_penalty": 1.15,

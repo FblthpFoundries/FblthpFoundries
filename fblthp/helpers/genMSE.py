@@ -1,4 +1,5 @@
 from zipfile import ZipFile, ZIP_DEFLATED
+import os
 from datetime import datetime
 from pathlib import Path
 from .magicCard import Card
@@ -62,3 +63,7 @@ def createMSE(name: str, cards: list[Card]):
         for card in cards:
             if card.image_path:
                 zip.write(card.image_path, card.name.replace(' ',''))
+
+    os.remove(BASE_DIR/"helpers"/"toZip"/"set")
+
+    return f'{BASE_DIR}/{name}.mse-set'

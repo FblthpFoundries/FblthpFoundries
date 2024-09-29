@@ -4,3 +4,6 @@
 [submodule "fblthp/Proxyshop"]
 	path = fblthp/Proxyshop
 	url = https://github.com/sfarrell0/Proxyshop.git
+[submodule "fblthp/Basic-M15-Magic-Pack"]
+	path = fblthp/Basic-M15-Magic-Pack
+	url = https://github.com/FblthpFoundries/Basic-M15-Magic-Pack

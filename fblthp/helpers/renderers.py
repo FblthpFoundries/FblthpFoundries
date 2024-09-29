@@ -1,19 +1,51 @@
-import json
-import os
-import sys
-import re
+import json, os, sys, re, subprocess
 from .magicCard import Card
+from .genMSE import createMSE
 
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
+FBLTHP_OUT = BASE_DIR / "images" / "rendered"
 
 
 
 class BaseRenderer():
     def __init__(self):
+        if not os.path.exists(FBLTHP_OUT):
+            os.makedirs(FBLTHP_OUT)
         pass
-    def render_card(self, card, art_path):
+    def render_cards(self, cards:list[Card]):
         pass
+
+class MSERenderer(BaseRenderer):
+    def __init__(self):
+        super().__init__()
+
+    def render_cards(self, cards:list[Card]):
+        MSE_PATH = BASE_DIR / 'Basic-M15-Magic-Pack'
+        print(len(cards))
+
+        zipPath = createMSE('tmp', cards)
+
+        renderScript = f'for each c in set.cards do write_image_file(c, file: c.name + \".png\")'
+            
+
+        scriptProcess = subprocess.Popen(['echo', renderScript], stdout=subprocess.PIPE, text=True)
+        renderProcess = subprocess.Popen([MSE_PATH/'mse', '--cli', zipPath], stdin=scriptProcess.stdout, stdout= subprocess.PIPE, text=True)
+
+        output, error = renderProcess.communicate()
+
+        #print(output)
+        #print(error)
+        for card in cards:
+            fileName = card.name.replace(' ', '').replace('\'', '').replace(',', '')
+            os.rename(BASE_DIR/f'{card.name[1:] if card.name[0] == ' ' else card.name}.png', FBLTHP_OUT/f'{fileName}.png')
+            card.render_path = FBLTHP_OUT/f'{fileName}.png'
+
+        os.remove(BASE_DIR/'tmp.mse-set')
+        for file in os.listdir(BASE_DIR):
+            if file.endswith('.png'):
+                os.remove(file)
+
 
 class ProxyshopRenderer(BaseRenderer):
     def __init__(self):
@@ -45,6 +77,11 @@ class ProxyshopRenderer(BaseRenderer):
         output["set"] = "ll" #TODO: Change this to something cooler
 
         return output
+    
+    def render_cards(self, cards: list[Card]):
+        for card in cards:
+            card.render_path = self.render_card(card, card.image_path)
+
     def render_card(self, card, art_path):
         os.environ["HEADLESS"] = "True"
         PROXYSHOP_PATH = BASE_DIR / "Proxyshop"
@@ -104,9 +141,6 @@ class ProxyshopRenderer(BaseRenderer):
         else:
             print(f"Rendering failed: Unknown error")
         PROXYSHOP_OUT = BASE_DIR / "Proxyshop" / "out"
-        FBLTHP_OUT = BASE_DIR / "images" / "rendered"
-        if not os.path.exists(FBLTHP_OUT):
-            os.makedirs(FBLTHP_OUT)
         for filename in os.listdir(PROXYSHOP_OUT):
                 if filename.startswith(card.name):
                     new_path = os.path.join(FBLTHP_OUT, f"{card.name}_{card.uuid}.png")
@@ -136,7 +170,7 @@ if __name__ == "__main__":
 
     card = {"flavor_text":"In the face of overwhelming odds, goblin shamans always succeed.","loyalty":"","mana_cost":"<4> <R>","name":"Goblin Looter","oracle_text":"Goblin Looter enters with two oil counters on it. \n <T>: Goblin Looter gains flying until end of turn.","power":"4","toughness":"4","type_line":"Creature - Goblin Rogue"}
     card = Card(card)
-    renderer = ProxyshopRenderer()
+    renderer = MSERenderer()
     print(BASE_DIR)
     cv2.imshow("test", cv2.imread(BASE_DIR / Path("stormCrow.jpg")))
     renderer.render_card(card, BASE_DIR / Path("stormCrow.jpg"))

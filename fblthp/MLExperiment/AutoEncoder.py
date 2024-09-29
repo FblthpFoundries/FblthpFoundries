@@ -1,4 +1,4 @@
-from transformers import BertConfig, EncoderDecoderConfig, EncoderDecoderModel, BertTokenizer
+from transformers import BertConfig, EncoderDecoderConfig, EncoderDecoderModel, BertTokenizer, PretrainedConfig
 from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer
 from csv2tokens import getCorpus
 from datasets import load_dataset
@@ -73,6 +73,28 @@ def train(model, tokenizer):
     )
     trainer.train()
 
+def gen(): 
+    model = EncoderDecoderModel.from_pretrained('./test/checkpoint-6000' )
+    tokenizer = BertTokenizer.from_pretrained("google-bert/bert-base-uncased")
+    text = 'This is a start'
+
+    model.config.decoder_start_token_id = tokenizer.cls_token_id
+    model.config.decoder.bos_token_id =tokenizer.cls_token_id
+    model.pad_token_id = tokenizer.pad_token_id
+
+    print(tokenizer.cls_token_id)
+    print(model.config.decoder_start_token_id)
+    print(model.config.decoder.bos_token_id)
+
+    print(tokenizer.special_tokens_map)
+    
+    input_ids = tokenizer(text, return_tensors='pt').input_ids
+
+    gen_ids = model.generate(input_ids)
+    gen_text = tokenizer.batch_decode(gen_ids, skip_special_tokens=True)[0]
+    print(gen_text)
+
 if __name__ == '__main__':
-    model, tokenizer = setup()
-    train(model, tokenizer)
+    gen()
+    #model, tokenizer = setup()
+    #train(model, tokenizer)

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from TransformerVAE import TransformerVAE
+import wandb
 from tokenizers import Tokenizer, models, trainers, pre_tokenizers
 from tqdm import tqdm  # Import tqdm for progress bars
 import json, requests, os
@@ -154,40 +155,76 @@ class MagicCardDataset(Dataset):
         return corpus
 
 
-# Training loop with tqdm progress bars
-def train_vae(model, dataloader, optimizer, num_epochs=10, device='cuda'):
+# Training loop with wandb logging
+def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cuda'):
     model.train()
-    
+
+    # Log hyperparameters if necessary
+    wandb.config.update({
+        "learning_rate": optimizer.defaults["lr"],
+        "epochs": num_epochs,
+    })
+
     for epoch in range(num_epochs):
         total_loss = 0
-        
+
         # Wrap the dataloader with tqdm for batch-level progress bar
         with tqdm(dataloader, unit="batch") as tepoch:
             tepoch.set_description(f"Epoch {epoch+1}/{num_epochs}")
-            
-            for x in tepoch:
+
+            for batch_idx, x in enumerate(tepoch):
                 x = x.to(device)
                 optimizer.zero_grad()
-                #print(f"X Shape {x.shape}")
+
                 # Forward pass through the VAE
                 decoded_x, logits, mu, logvar = model(x)
-                #print(f"Decoded X Shape {decoded_x.shape}")
+
                 # Compute the VAE loss
                 loss = model.vae_loss(logits, x, mu, logvar)
-                
+
                 # Backpropagation and optimization
                 loss.backward()
                 optimizer.step()
-                
+
                 # Accumulate the loss
                 total_loss += loss.item()
-                
+
+                # Log loss to wandb for this batch
+                wandb.log({"batch_loss": loss.item(), "epoch": epoch + 1})
+
                 # Update tqdm with current loss
                 tepoch.set_postfix(loss=loss.item())
-        
+
+                if batch_idx % 5 == 0:
+                    log_generated_card(model, tokenizer, device)
+
+        # Compute the average loss for this epoch
         avg_loss = total_loss / len(dataloader)
+        
+        # Log average loss for the epoch
+        wandb.log({"epoch_loss": avg_loss, "epoch": epoch + 1})
+
         print(f'Epoch {epoch+1}, Average Loss: {avg_loss:.4f}')
 
+    # Finish the run (optional)
+    wandb.finish()
+
+# Function to generate and log a card to wandb
+def log_generated_card(model, tokenizer, device='cuda'):
+    model.eval()  # Set model to evaluation mode
+    
+    # Generate a random latent vector (or sample from the latent space)
+    latent_vector = torch.randn(1, model.encoder.fc_mu.out_features).to(device)
+    
+    # Generate a card from the latent vector
+    generated_token_ids = model.generate(latent_vector, max_len=50)[0]  # Adjust max_len if needed
+    # Convert token IDs back to human-readable text (you need your tokenizer for this)
+    generated_text = tokenizer.decode(generated_token_ids.squeeze().tolist())
+    
+    # Log the generated card text to wandb
+    wandb.log({"generated_card": wandb.Html(generated_text)})
+
+    model.train()  # Switch back to training mode
 
 # Main training script
 def main():
@@ -198,12 +235,12 @@ def main():
     num_layers = 1  # Number of transformer encoder/decoder layers
     max_len = 200  # Maximum length of sequences
     batch_size = 4
-    num_epochs = 4
+    num_epochs = 1
     learning_rate = 0.001
 
 
     vocab_size = 20000
-    tokenizer_exists = False
+    tokenizer_exists = os.path.exists("wordpiece_tokenizer.json")
 
     if not tokenizer_exists:
         tokenizer = Tokenizer(models.WordPiece())
@@ -217,7 +254,7 @@ def main():
     else:
         tokenizer = Tokenizer.from_file("wordpiece_tokenizer.json")
 
-    
+    wandb.init(project="TransformerVAE")
     # Create the VAE model
     vae_model = TransformerVAE(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
     vae_model.print_model_size()
@@ -232,7 +269,7 @@ def main():
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
     # Start training
-    train_vae(vae_model, dataloader, optimizer, num_epochs=num_epochs, device=device)
+    train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device)
     torch.save(vae_model.state_dict(), 'vae_model.pt')
 
 if __name__ == "__main__":

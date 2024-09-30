@@ -1,6 +1,6 @@
 from transformers import BertConfig, EncoderDecoderConfig, EncoderDecoderModel, BertTokenizer, PretrainedConfig
 from transformers import Seq2SeqTrainingArguments, Seq2SeqTrainer
-from csv2tokens import getCorpus
+from fblthp.csv2tokens import getCorpus
 from datasets import load_dataset
 
 #https://colab.research.google.com/drive/1WIk2bxglElfZewOHboPFNj8H44_VAyKE?usp=sharing#scrollTo=-gYzA-w96wCt

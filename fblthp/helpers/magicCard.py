@@ -35,7 +35,6 @@ class Card(QListWidgetItem):
         planesText = r'level_[0-9]+_text'
         text = text.replace('\r\n\t\t', '\n ')
         text = re.sub(xmlRE, '', text)
-        print(text)
         elements = text.split('\r\n\t')
         superType, subType = None, None
 
@@ -59,7 +58,7 @@ class Card(QListWidgetItem):
                 case 'rule_text':
                     self.oracle_text = value
                 case 'image':
-                    self.image_path = saveMethod(value)
+                    self.image_path = saveMethod(value[1:])
                 case 'super_type':
                     superType = value
                 case 'sub_type':

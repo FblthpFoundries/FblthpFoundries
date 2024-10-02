@@ -37,8 +37,8 @@ class MSERenderer(BaseRenderer):
         #print(output)
         #print(error)
         for card in cards:
-            fileName = card.name.replace(' ', '').replace('\'', '').replace(',', '')
-            os.rename(BASE_DIR/f'{card.name[1:] if card.name[0] == ' ' else card.name}.png', FBLTHP_OUT/f'{fileName}.png')
+            fileName = card.name[1:] if card.name[0] == ' ' else card.name
+            os.rename(BASE_DIR/f'{fileName}.png', FBLTHP_OUT/f'{fileName}.png')
             card.render_path = FBLTHP_OUT/f'{fileName}.png'
 
         os.remove(BASE_DIR/'tmp.mse-set')

@@ -1,0 +1,19 @@
+I'm generating custom arts for a MTG commander deck. The commander is "{commander_name}".
+Here is a summary of the commander:
+{summary}
+I need to create new art for one of the cards in the deck, {card}.
+Look it up so you know what it does, and its lore.
+Give me {sample_size} unique art description(s) that can be used to generate art for that card.
+Incorporate a few themes, characters, magic, or effects from the commander's summary but mainly prioritize {card}'s own information you looked up. 
+Mention at the end of each description: "High fantasy style."
+Include(s) {color_identity} theme(s).
+Liberally use {color_identity} colors.
+Do not use the card or commander's name in the description. Describe characters and scenes in detail and color as much as possible.
+Describe the setting, colors, and background in detail.
+
+{additional}
+
+Return the art descriptions as JSON.
+Put the descriptions in a field named "prompts".
+The descriptions should be stored as plain strings in a list.
+Only return this JSON as a response.

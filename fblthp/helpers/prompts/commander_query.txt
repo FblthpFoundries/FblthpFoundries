@@ -1,0 +1,1 @@
+Give me a summary of the MTG character "{commander}". Search the internet to gather information. Include their story, lore, theme, colors, and card abilities in the summary. Give me a 200 word response. Also mention the mood that a deck build around that card would have.

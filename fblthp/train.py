@@ -42,7 +42,6 @@ class MagicCardDataset(Dataset):
         card_text = self.corpus_dataframe.iloc[idx]['card']
 
         tokenized = self.tokenizer.encode(card_text).ids
-
         return torch.tensor(tokenized)    
 
     def pull_scryfall_to_csv(self, filename):
@@ -175,10 +174,9 @@ def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cu
             for batch_idx, x in enumerate(tepoch):
                 x = x.to(device)
                 optimizer.zero_grad()
-
                 # Forward pass through the VAE
                 decoded_x, logits, mu, logvar = model(x)
-
+                print(decoded_x[:,:20])
                 # Compute the VAE loss
                 loss = model.vae_loss(logits, x, mu, logvar)
 
@@ -223,6 +221,8 @@ def log_generated_card(model, tokenizer, device='cuda'):
     
     # Log the generated card text to wandb
     wandb.log({"generated_card": wandb.Html(generated_text)})
+    print("ids[:20]:", generated_token_ids.squeeze().tolist()[:20])
+    print("decoded text: ", generated_text)
 
     model.train()  # Switch back to training mode
 

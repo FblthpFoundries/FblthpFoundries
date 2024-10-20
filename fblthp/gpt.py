@@ -83,6 +83,7 @@ def gen(
         do_sample=True,
         temperature = 0.9,
         max_length = max_length,
+        pad_token_id=tokenizer.eos_token_id
     )
     return tokenizer.batch_decode(output)[0]
 

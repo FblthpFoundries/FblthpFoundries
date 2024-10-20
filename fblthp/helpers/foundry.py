@@ -257,6 +257,7 @@ class LocalCardGenerator(BaseCardGenerator):
             do_sample=True,
             temperature = 0.9,
             max_length =400,
+            pad_token_id=self.tokenizer.eos_token_id
         )
 
         cardOutput = self.tokenizer.batch_decode(output)

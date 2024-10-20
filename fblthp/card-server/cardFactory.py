@@ -78,6 +78,7 @@ class Factory():
             do_sample=True,
             temperature = 0.9,
             max_length =maxLength,
+            pad_token_id=self.tokenizer.eos_token_id
         )
 
         cards = self.tokenizer.batch_decode(output)[0].split('<eos>')

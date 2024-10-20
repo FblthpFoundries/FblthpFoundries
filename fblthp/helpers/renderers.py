@@ -20,19 +20,34 @@ class MSERenderer(BaseRenderer):
     def __init__(self):
         super().__init__()
 
-    def render_cards(self, cards:list[Card]):
+    def render_cards(self, cards: list[Card]):
         MSE_PATH = BASE_DIR / 'Basic-M15-Magic-Pack'
         print(len(cards))
 
+        # Create the ZIP file path
         zipPath = createMSE('tmp', cards)
 
-        renderScript = f'for each c in set.cards do write_image_file(c, file: c.name + \".png\")'
-            
+        # Define the rendering script
+        renderScript = f'for each c in set.cards do write_image_file(c, file: c.name + ".png")'
 
-        scriptProcess = subprocess.Popen(['echo', renderScript], stdout=subprocess.PIPE, text=True)
-        renderProcess = subprocess.Popen([MSE_PATH/'mse', '--cli', zipPath], stdin=scriptProcess.stdout, stdout= subprocess.PIPE, text=True)
+        # Open the MSE process directly, passing the render script via stdin
+        try:
+            renderProcess = subprocess.Popen([MSE_PATH / 'mse', '--cli', zipPath],
+                                            stdin=subprocess.PIPE,
+                                            stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE,
+                                            text=True)
 
-        output, error = renderProcess.communicate()
+            # Send the script content to the stdin of the MSE process
+            output, error = renderProcess.communicate(input=renderScript)
+
+            if error:
+                print(f"Error during rendering: {error}")
+            else:
+                print(f"Rendering completed. Output: {output}")
+
+        except FileNotFoundError:
+            print(f"File not found. Ensure MSE_PATH is correct: {MSE_PATH / 'mse'}")
 
         #print(output)
         #print(error)

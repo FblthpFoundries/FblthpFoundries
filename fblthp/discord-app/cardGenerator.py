@@ -24,6 +24,7 @@ if __name__ == '__main__':
         do_sample=True,
         temperature = 0.9,
         max_length =200,
+        pad_token_id=tokenizer.eos_token_id
     )
 
     print(tokenizer.batch_decode(output)[0].split('<eos>')[0].replace('—', '-').replace('\u2212', '-'))

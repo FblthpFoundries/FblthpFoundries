@@ -81,10 +81,10 @@ class Card(QListWidgetItem):
             lineCount = 1
             while len(planeswalkerText) > 0:
                 if f'loyalty_cost_{lineCount}' in planeswalkerText:
-                    oracle += f'{planeswalkerText[f'loyalty_cost_{lineCount}']}: '
+                    oracle += f"{planeswalkerText[f'loyalty_cost_{lineCount}']}: "
                     del planeswalkerText[f'loyalty_cost_{lineCount}']
                 if f'level_{lineCount}_text' in planeswalkerText:
-                    oracle += f'{planeswalkerText[f'level_{lineCount}_text']}\n'
+                    oracle += f"{planeswalkerText[f'level_{lineCount}_text']}\n"
                     del planeswalkerText[f'level_{lineCount}_text']
                 lineCount += 1
 

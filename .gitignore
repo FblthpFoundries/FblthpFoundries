@@ -18,3 +18,5 @@ fblthp/saveTest.xml
 fblthp/helpers/toZip/set
 fblthp/wordpiece_tokenizer.json
 fblthp/wandb/*
+fblthp/output.txt
+*.pt

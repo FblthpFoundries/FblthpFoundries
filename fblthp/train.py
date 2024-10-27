@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, Dataset
 from TransformerVAE import TransformerVAE
 import wandb
 from tokenizers import Tokenizer, models, trainers, pre_tokenizers
 from tqdm import tqdm  # Import tqdm for progress bars
 import json, requests, os
+import traceback
 import pandas
 
 # Dummy dataset for demonstration purposes
@@ -24,7 +26,7 @@ class RandomDataset(Dataset):
         torch.manual_seed(idx)
         return torch.randint(0, self.vocab_size, (self.seq_length,))
 class MagicCardDataset(Dataset):
-    def __init__(self, tokenizer, max_len=200):
+    def __init__(self, tokenizer, max_len=125):
 
         self.tokenizer = tokenizer
         self.max_len = max_len
@@ -155,45 +157,55 @@ class MagicCardDataset(Dataset):
 
 
 # Training loop with wandb logging
-def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cuda'):
+def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cuda', scheduler=None, max_len=125, decay_rate=0.9995):
     model.train()
+    initial_teacher_forcing_ratio = 1.0
+    final_teacher_forcing_ratio = 0.1
 
     # Log hyperparameters if necessary
     wandb.config.update({
         "learning_rate": optimizer.defaults["lr"],
         "epochs": num_epochs,
     })
-
+    ctr = 1
     for epoch in range(num_epochs):
         total_loss = 0
+        teacher_forcing_ratio = max(final_teacher_forcing_ratio, initial_teacher_forcing_ratio * (decay_rate ** epoch))
 
         # Wrap the dataloader with tqdm for batch-level progress bar
         with tqdm(dataloader, unit="batch") as tepoch:
             tepoch.set_description(f"Epoch {epoch+1}/{num_epochs}")
 
             for batch_idx, x in enumerate(tepoch):
+                teacher_forcing_ratio = max(final_teacher_forcing_ratio, initial_teacher_forcing_ratio * (decay_rate ** ctr))
+                ctr += 1
                 x = x.to(device)
                 optimizer.zero_grad()
                 # Forward pass through the VAE
-                decoded_x, logits, mu, logvar = model(x)
-                print(decoded_x[:,:20])
+                x = x[:,:max_len]
+                decoded_x, logits, mu, logvar = model(x, target_seq=x, teacher_forcing_ratio=teacher_forcing_ratio)
+                #print(decoded_x[:,:20])
                 # Compute the VAE loss
                 loss = model.vae_loss(logits, x, mu, logvar)
 
                 # Backpropagation and optimization
                 loss.backward()
                 optimizer.step()
+                if scheduler:
+                    scheduler.step()
+                
 
                 # Accumulate the loss
                 total_loss += loss.item()
 
                 # Log loss to wandb for this batch
-                wandb.log({"batch_loss": loss.item(), "epoch": epoch + 1})
+                wandb.log({"batch_loss": loss.item(), "epoch": epoch + 1, "batch": batch_idx + 1, "teacher_forcing_ratio": teacher_forcing_ratio, "lr": optimizer.param_groups[0]['lr']})
 
                 # Update tqdm with current loss
                 tepoch.set_postfix(loss=loss.item())
 
-                if batch_idx % 5 == 0:
+                if batch_idx % 25 == 0:
+                    print(teacher_forcing_ratio)
                     log_generated_card(model, tokenizer, device)
 
         # Compute the average loss for this epoch
@@ -230,13 +242,14 @@ def log_generated_card(model, tokenizer, device='cuda'):
 def main():
     # Hyperparameters
     embed_dim = 128  # Embedding dimension
-    num_heads = 1  # Number of attention heads
-    hidden_dim = 256  # Feedforward network hidden dimension
-    num_layers = 1  # Number of transformer encoder/decoder layers
-    max_len = 200  # Maximum length of sequences
+    num_heads = 8  # Number of attention heads
+    hidden_dim = 768  # Feedforward network hidden dimension
+    num_layers = 4  # Number of transformer encoder/decoder layers
+    max_len = 125  # Maximum length of sequences
     batch_size = 4
     num_epochs = 1
-    learning_rate = 0.001
+    learning_rate = 0.0005
+    decay_rate = 0.9995
 
 
     vocab_size = 20000
@@ -249,28 +262,45 @@ def main():
         tokenizer.enable_padding(pad_id=0, pad_token=special_tokens[0], length=max_len)
         tokenizer.enable_truncation(max_length=max_len)
         trainer = trainers.WordPieceTrainer(vocab_size=vocab_size, special_tokens=special_tokens)
+        dataset = MagicCardDataset(tokenizer, max_len=max_len) # just here in order to make corpus.csv on a first go (bad code but it works)
         tokenizer.train(['corpus.csv'], trainer)
         tokenizer.save("wordpiece_tokenizer.json")
     else:
         tokenizer = Tokenizer.from_file("wordpiece_tokenizer.json")
 
-    wandb.init(project="TransformerVAE")
+    wandb.init(project="TransformerVAE", config={
+    "learning_rate": learning_rate,
+    "epochs": num_epochs,
+    "batch_size": batch_size,
+    "embed_dim": embed_dim,
+    "num_heads": num_heads,
+    "hidden_dim": hidden_dim,
+    "num_layers": num_layers,
+    "max_len": max_len,
+    })
     # Create the VAE model
     vae_model = TransformerVAE(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
     vae_model.print_model_size()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     vae_model = vae_model.to(device)
     
-    # Optimizer
-    optimizer = optim.Adam(vae_model.parameters(), lr=learning_rate)
+    
     
     # DataLoader (use a dummy dataset for now)
     dataset = MagicCardDataset(tokenizer, max_len=max_len)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
     
+    # Optimizer
+    optimizer = optim.Adam(vae_model.parameters(), lr=learning_rate)
+    scheduler = CosineAnnealingLR(optimizer, T_max=(num_epochs * len(dataset) // batch_size))
+
     # Start training
-    train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device)
-    torch.save(vae_model.state_dict(), 'vae_model.pt')
+    try:
+        train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device, scheduler=scheduler, max_len=max_len, decay_rate=decay_rate)
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+    torch.save(vae_model.state_dict(), 'vae_model2.pt')
 
 if __name__ == "__main__":
     main()

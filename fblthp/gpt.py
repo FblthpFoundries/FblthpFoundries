@@ -1,6 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
-from fblthp.csv2tokens import getCorpus
+from csv2tokens import getCorpus
 from datasets import load_dataset
 from transformers import DataCollatorForLanguageModeling
 device = 'cuda'
@@ -10,10 +10,11 @@ num_epochs = 5
 #https://huggingface.co/docs/transformers/tasks/language_modeling
 
 def train():
+    from helpers.secret_tokens import hugging_face_token
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
     tokenizer.pad_token = tokenizer.eos_token
     data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-    model = AutoModelForCausalLM.from_pretrained('gpt2')
+    model = AutoModelForCausalLM.from_pretrained('gpt2', token = hugging_face_token())
 
     def preprocess_function(examples):
         return tokenizer(["".join(x) for x in examples['card']])
@@ -70,10 +71,11 @@ def train():
 
 
 def gen(
-        text_start = "<tl>",
+        text_start = "<tl> Legendary Planeswalker",
         max_length = 400,
-        model_path = './magic_model/'
+        model_path = './magic_model/checkpoint-7000'
 ):
+    from helpers.secret_tokens import hugging_face_token
     tokenizer = AutoTokenizer.from_pretrained('gpt2')
     model = AutoModelForCausalLM.from_pretrained(model_path)
     encoded_input = tokenizer(text_start, return_tensors='pt').to(device)
@@ -85,10 +87,11 @@ def gen(
         max_length = max_length,
         pad_token_id=tokenizer.eos_token_id
     )
+    model.push_to_hub('FblthpAI/magic_model', token =hugging_face_token() )
     return tokenizer.batch_decode(output)[0]
 
-    #model.push_to_hub('FblthpAI/magic_model')
 
 if __name__ == '__main__':
     #train()
-    print(gen(model_path="./magic_mike/checkpoint-8500").split("<eos>")[0])
+    #print(gen(model_path="./magic_mike/checkpoint-7000").split("<eos>")[0])
+    print(gen().split('<eos>')[0])

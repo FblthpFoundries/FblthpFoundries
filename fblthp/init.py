@@ -38,7 +38,7 @@ for card in cards:
         continue
     if not 'paper' in card['games']:
         continue
-    if 'Hero' in card['type_line'] or 'Plane' in card['type_line'] or 'Card' in card['type_line']:
+    if 'Hero' in card['type_line'] or 'Plane ' in card['type_line'] or 'Card' in card['type_line']:
         continue
     data = '\n'
     for feature in features:

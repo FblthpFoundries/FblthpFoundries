@@ -115,7 +115,7 @@ class MainWindow(QWidget):
 
     def toMSE(self, fileName):
         cards = [self.card_list_widget.item(i) for i in range(self.card_list_widget.count())]
-        genMSE.createMSE(fileName, cards)
+        genMSE.createMSE('test', cards)
 
     def onClose(self):
         imgPath = Path(__file__).parent / 'images' / 'downloaded'

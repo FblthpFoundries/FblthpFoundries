@@ -109,12 +109,33 @@ def getCorpus(csv):
             text +=  append + ' ' + featureDict[feature][:1] + '\\' + featureDict[feature][1:]
         corpus.append(sanitize(text[1:]) + specialTokenDict['eos'])
 
+    #corpus += getPlaneswalkers(df)
+
     f = open('corpus.csv', 'w', encoding='utf-8')
     f.write('card\n')
     for text in corpus:
         f.write('\"'+text + '\"\n')
     f.close()
     return corpus
+
+def getPlaneswalkers(df):
+    corpus = []
+
+    for index, row in df.iterrows():
+        if not 'Planeswalker' in row['type_line']:
+            continue
+        text= ''
+        name = row['name']
+        for feature in featureDict:
+            append = ' ' +featureDict[feature] 
+            if feature in row:
+                append += ' ' + str(row[feature]) if not str(row[feature]) == '<empty>' else '' 
+            if not feature == 'name':
+                append = append.replace(name, '~')
+            text +=  append + ' ' + featureDict[feature][:1] + '\\' + featureDict[feature][1:]
+        corpus.append(sanitize(text[1:]) + specialTokenDict['eos'])
+    return corpus
+
 
     
 def sanitize(text):

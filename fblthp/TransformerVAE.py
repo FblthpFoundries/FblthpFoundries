@@ -11,6 +11,10 @@ class PositionalEncoding(nn.Module):
     def __init__(self, embed_dim, max_len=5000):
         super(PositionalEncoding, self).__init__()
         
+        
+        # Register pe as a buffer, meaning it won't be updated during training
+        self.register_buffer('pe', self.compute_positional_encodings(embed_dim, max_len))
+    def compute_positional_encodings(self, embed_dim, max_len):
         # Create a matrix of shape (max_len, embed_dim) for positional encodings
         pe = torch.zeros(max_len, embed_dim)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
@@ -19,16 +23,11 @@ class PositionalEncoding(nn.Module):
         div_term = torch.exp(torch.arange(0, embed_dim, 2).float() * (-math.log(10000.0) / embed_dim))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        
-        # Add a batch dimension (unsqueeze(0)) so it can be added to the input embeddings
         pe = pe.unsqueeze(0).transpose(0, 1)
-        
-        # Register pe as a buffer, meaning it won't be updated during training
-        self.register_buffer('pe', pe)
-
+        return pe
     def forward(self, x):
         # Add positional encodings to the input embeddings
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[:x.size(1), :].permute(1, 0, 2)
         return x
 
 class PoolingTransformerEncoder(nn.Module):
@@ -63,8 +62,25 @@ class PoolingTransformerEncoder(nn.Module):
         # Pass through the transformer encoder with batch_first=True
         encoded = self.transformer_encoder(embedded)  # Shape: [batch_size, sequence_length, embed_dim]
         
-        # Max pooling over the sequence length dimension
-        pooled = torch.max(encoded, dim=1).values  # Shape: [batch_size, embed_dim]
+        # # Max pooling over the sequence length dimension
+        # pooled = torch.max(encoded, dim=1).values  # Shape: [batch_size, embed_dim]
+
+        # # Average pooling over the sequence length dimension
+        # pooled = torch.mean(encoded, dim=1)  # Shape: [batch_size, embed_dim]
+
+        # Take the absolute values and then find the max along the sequence length dimension
+        absolute_max_pooled = torch.max(encoded.abs(), dim=1).values
+
+        # Compute indices for the maximum absolute value in the sequence dimension
+        max_indices = encoded.abs().argmax(dim=1, keepdim=True)  # Shape: [batch_size, 1, embed_dim]
+
+        # Gather the values along the sequence dimension based on max_indices
+        max_sign_values = torch.gather(encoded, 1, max_indices).squeeze(1)  # Shape: [batch_size, embed_dim]
+
+        # Multiply absolute max pooled with the sign of these gathered max values
+        pooled = absolute_max_pooled * torch.sign(max_sign_values)
+
+
         
         # Get mean and log variance for reparameterization
         mu = self.fc_mu(pooled)  # Shape: [batch_size, embed_dim]
@@ -88,12 +104,15 @@ class PooledTransformerDecoder(nn.Module):
         self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_layers)
         
         # Linear layer to map to vocabulary size
-        self.fc_out = nn.Linear(embed_dim, output_dim)
-        
+        self.fc_out = nn.Sequential(
+            #nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, output_dim)
+        )
+        self.tgt_mask = torch.triu(torch.ones(max_len, max_len, device=device) * float('-inf'), diagonal=1)
         # Store maximum length and special tokens
         self.max_len = max_len
-        self.sos_token = 0  # Assume <sos> token ID is 0
-        self.eos_token = 1  # Assume <eos> token ID is 1
+        self.sos_token = 1
+        self.eos_token = 2
     
     def forward(self, memory, target_seq=None, max_len=None, teacher_forcing_ratio=0.5):
         """
@@ -109,7 +128,8 @@ class PooledTransformerDecoder(nn.Module):
         generated_sequence = torch.full((batch_size, 1), self.sos_token, dtype=torch.long, device=device)
         
         # Expand memory (latent vector) to match the sequence length
-        BIG_OUTPUT_LOGIT_LIST = torch.zeros((batch_size, 0, self.output_dim), device=device)  # On the right device
+        BIG_OUTPUT_LOGIT_LIST = torch.empty((batch_size, max_len, self.output_dim), device=device)
+        memory = memory.unsqueeze(1)
         
         for step in range(max_len):
             # Embed the current sequence
@@ -117,12 +137,17 @@ class PooledTransformerDecoder(nn.Module):
             embedded = self.pos_encoder(embedded)  # Add positional encodings
             
             # Pass through the transformer decoder with batch_first=True
-            decoded = self.transformer_decoder(tgt=embedded, memory=memory.unsqueeze(1).expand(-1, step + 1, -1))
+            # Create a causal mask to prevent attending to future tokens
+            current_mask = self.tgt_mask[:step + 1, :step + 1]
+            decoded = self.transformer_decoder(tgt=embedded, memory=memory, tgt_mask=current_mask)
+
             
             # Predict the next token (only use the last token in the sequence)
             output_logits = self.fc_out(decoded[:, -1, :])  # Shape: [batch_size, output_dim]
-            BIG_OUTPUT_LOGIT_LIST = torch.cat([BIG_OUTPUT_LOGIT_LIST, output_logits.unsqueeze(1)], dim=1)
-            next_token = torch.argmax(output_logits, dim=-1)  # Shape: [batch_size]
+            BIG_OUTPUT_LOGIT_LIST[:, step, :] = output_logits
+            temperature = 0.8
+            scaled_output_logits = output_logits / temperature
+            next_token = torch.argmax(scaled_output_logits, dim=-1)  # Shape: [batch_size]
 
             if target_seq is not None and torch.rand(1).item() < teacher_forcing_ratio:
                 # If target sequence is provided, use it as "ground truth"
@@ -132,7 +157,8 @@ class PooledTransformerDecoder(nn.Module):
             generated_sequence = torch.cat([generated_sequence, next_token.unsqueeze(1)], dim=1)
             
             # If all batches predict <eos>, stop early
-            if (next_token == self.eos_token).all():
+            done = (next_token == self.eos_token)
+            if done.all():
                 break
         
         returned = generated_sequence[:, 1:]  # Remove <sos> token
@@ -155,13 +181,19 @@ class TransformerVAE(nn.Module):
 
     def print_model_size(self):
         param_size = 0
+        params = 0
         for param in self.parameters():
             param_size += param.nelement() * param.element_size()  # number of elements * size of each element
+            params += param.nelement()
         
         buffer_size = 0
+        buffers = 0
         for buffer in self.buffers():
             buffer_size += buffer.nelement() * buffer.element_size()  # number of elements * size of each element
-
+            buffers += buffer.nelement()
+        
+        print(f"Number of parameters: {params}")
+        print(f"Number of buffers: {buffers}")
         total_size = param_size + buffer_size
         print(f"Model Size: {total_size / (1024 ** 2):.2f} MB")  # Convert to megabytes (MB)
 
@@ -208,7 +240,7 @@ if __name__ == "__main__":
     
     # Generate a batch of random tokenized sequences as input (sequence_length, batch_size)
     sequence_length = 50
-    batch_size = 4
+    batch_size = 2
     input_tokens = torch.randint(0, input_dim, (sequence_length, batch_size)).to(device)  # Move to device
     
     # Run the forward pass of the encoder

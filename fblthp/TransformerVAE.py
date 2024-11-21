@@ -38,7 +38,7 @@ class PoolingTransformerEncoder(nn.Module):
         self.embedding = nn.Embedding(input_dim, embed_dim)
         
         # Positional encoding
-        self.pos_encoder = PositionalEncoding(embed_dim, max_len)
+        self.pos_encoder = PositionalEncoding(embed_dim, max_len+2)
         
         # Transformer encoder layers with batch_first=True
         encoder_layers = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim, batch_first=True)
@@ -97,7 +97,7 @@ class PooledTransformerDecoder(nn.Module):
         self.embedding = nn.Embedding(output_dim, embed_dim)
         
         # Positional encoding for the decoder
-        self.pos_encoder = PositionalEncoding(embed_dim, max_len)
+        self.pos_encoder = PositionalEncoding(embed_dim, max_len+2)
         
         # Transformer decoder layers with batch_first=True
         decoder_layers = nn.TransformerDecoderLayer(d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim, batch_first=True)
@@ -179,23 +179,37 @@ class TransformerVAE(nn.Module):
         eps = torch.randn_like(std)    # Random noise
         return mu + eps * std          # z = mu + eps * std
 
-    def print_model_size(self):
+    def print_model_size(self, debug=False):
         param_size = 0
         params = 0
-        for param in self.parameters():
-            param_size += param.nelement() * param.element_size()  # number of elements * size of each element
+
+        print("\nParameters:")
+        for name, param in self.named_parameters():
+            size = param.nelement() * param.element_size()  # number of elements * size of each element
+            param_size += size
             params += param.nelement()
-        
+            if size < 1024*10:
+                continue
+            if debug:
+                print(f"  Name: {name}, Shape: {param.shape}, Memory: {size / (1024 ** 2):.2f} MB")
+
         buffer_size = 0
         buffers = 0
-        for buffer in self.buffers():
-            buffer_size += buffer.nelement() * buffer.element_size()  # number of elements * size of each element
+
+        print("\nBuffers:")
+        for name, buffer in self.named_buffers():
+            size = buffer.nelement() * buffer.element_size()  # number of elements * size of each element
+            buffer_size += size
             buffers += buffer.nelement()
-        
-        print(f"Number of parameters: {params}")
-        print(f"Number of buffers: {buffers}")
+            print(f"  Name: {name}, Shape: {buffer.shape}, Memory: {size / (1024 ** 2):.2f} MB")
+
         total_size = param_size + buffer_size
-        print(f"Model Size: {total_size / (1024 ** 2):.2f} MB")  # Convert to megabytes (MB)
+
+        print("\nSummary:")
+        print(f"  Number of parameters: {params}")
+        print(f"  Number of buffers: {buffers}")
+        print(f"  Total Model Size: {total_size / (1024 ** 2):.2f} MB")  # Convert to megabytes (MB)
+
 
     def forward(self, x, target_seq=None, max_len=None, teacher_forcing_ratio=0.5):
         # Encode the input to get mu and logvar
@@ -215,7 +229,7 @@ class TransformerVAE(nn.Module):
         """VAE loss function combining reconstruction loss and KL divergence with KL annealing"""
         decoded_x = decoded_x.float()
         left = decoded_x.view(-1, decoded_x.size(-1))
-        right = x.reshape(-1).to(device)
+        right = x[:, 1:].reshape(-1).to(device)
         recon_loss = nn.CrossEntropyLoss(ignore_index=pad_token_idx)(left, right)
 
         
@@ -228,7 +242,7 @@ class TransformerVAE(nn.Module):
 
 if __name__ == "__main__":
     # Define hyperparameters for the encoder
-    input_dim = 10000  # Example vocabulary size
+    input_dim = 20000  # Example vocabulary size
     embed_dim = 32  # Embedding size
     num_heads = 8  # Number of attention heads in the transformer
     hidden_dim = 1024  # Size of the feedforward layer in the transformer

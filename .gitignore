@@ -20,3 +20,4 @@ fblthp/wordpiece_tokenizer.json
 fblthp/wandb/*
 fblthp/output.txt
 *.pt
+fblthp/tokenizer/*

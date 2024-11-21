@@ -1,3 +1,4 @@
+from tokenizers import Tokenizer
 import torch
 import numpy as np
 from sklearn.manifold import TSNE
@@ -5,11 +6,19 @@ import matplotlib.pyplot as plt
 import os
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
 from collections import defaultdict
 
 import re
+import argparse
+
+from TransformerVAE import PositionalEncoding, TransformerVAE
+from train import MagicCardDataset
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 # Assuming your TransformerVAE model and data loader are set up like this
 # model: the TransformerVAE model
@@ -124,10 +133,7 @@ def visualize_latent_space(model, dataloader, n_samples=1000, perplexity=30, lea
             latent = model.encode(card.to(model.device))  # Change to your model's encode method
             latent_vectors.append(latent.cpu().numpy())
             
-            for cat in cats:
-                if cat in 
 
-            labels.extend(label.numpy())  # Optional: change label to card attributes if needed
 
     # Stack all latent vectors for t-SNE
     latent_vectors = np.concatenate(latent_vectors, axis=0)
@@ -145,53 +151,107 @@ def visualize_latent_space(model, dataloader, n_samples=1000, perplexity=30, lea
     plt.ylabel("t-SNE Component 2")
     plt.show()
 
-
+def test_cards(n, vae_model, tokenizer):
+    for i in range(n):
+        # Generate a random latent vector (or sample from the latent space)
+        latent_vector = torch.randn(1, vae_model.encoder.fc_mu.out_features).to(device)
+        # Generate a card from the latent vector
+        generated_token_ids = vae_model.generate(latent_vector, max_len=50)[0]  # Adjust max_len if needed
+        # Convert token IDs back to human-readable text (you need your tokenizer for this)
+        generated_text = tokenizer.decode(generated_token_ids.squeeze().tolist(), skip_special_tokens=False)
+        
+        # Log the generated card text to wandb
+        print("ids[:20]:", generated_token_ids.squeeze().tolist()[:20])
+        print("decoded text: ", generated_text.replace('<pad>', '').replace('<eos>', ''))
 
 if __name__ == '__main__':
+    max_len = 125
 
-    if not os.path.exists("wordpiece_tokenizer.json"):
-        tokenizer = Tokenizer(models.WordPiece())
-        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
-        special_tokens = ["<pad>", "<sos>", "<eos>", "<unk>"]
-        tokenizer.enable_padding(pad_id=0, pad_token=special_tokens[0], length=max_len)
-        tokenizer.enable_truncation(max_length=max_len)
-        trainer = trainers.WordPieceTrainer(vocab_size=vocab_size, special_tokens=special_tokens)
-        dataset = MagicCardDataset(tokenizer, max_len=max_len) # just here in order to make corpus.csv on a first go (bad code but it works)
-        tokenizer.train(['corpus.csv'], trainer)
-        tokenizer.save("wordpiece_tokenizer.json")
-    else:
-        tokenizer = Tokenizer.from_file("wordpiece_tokenizer.json")
+    tokenizer = Tokenizer.from_file("wordpiece_tokenizer.json")
+    dataset = MagicCardDataset(tokenizer, max_len=max_len) # just here in order to make corpus.csv on a first go (bad code but it works)
 
-    wandb.init(project="TransformerVAE", config={
-    "learning_rate": learning_rate,
-    "epochs": num_epochs,
-    "batch_size": batch_size,
-    "embed_dim": embed_dim,
-    "num_heads": num_heads,
-    "hidden_dim": hidden_dim,
-    "num_layers": num_layers,
-    "max_len": max_len,
-    })
-    # Create the VAE model
-    vae_model = TransformerVAE(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
-    vae_model.print_model_size()
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    vae_model = vae_model.to(device)
+
+    # Argument parser
+    parser = argparse.ArgumentParser(description='Load a TransformerVAE model from a file.')
+    parser.add_argument('--model_path', type=str, required=True, help='Path to the model file.')
+
+    args = parser.parse_args()
+
+    # Load the model
+    checkpoint = torch.load(args.model_path)
+    vae_model = TransformerVAE(vocab_size=20000, embed_dim=768, \
+                               num_heads=12, hidden_dim=3072, num_layers=12, max_len=125)
     
+    vae_model.load_state_dict(checkpoint["model_state"])
+    vae_model.encoder.pos_encoder = PositionalEncoding(768, max_len*2)
+    vae_model.decoder.pos_encoder = PositionalEncoding(768, max_len*2)
+    vae_model.print_model_size()
+    vae_model = vae_model.to(device)
     
     
     # DataLoader (use a dummy dataset for now)
     dataset = MagicCardDataset(tokenizer, max_len=max_len)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
-    
-    # Optimizer
-    optimizer = optim.Adam(vae_model.parameters(), lr=learning_rate)
-    scheduler = CosineAnnealingLR(optimizer, T_max=(num_epochs * len(dataset) // batch_size))
+    #dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    # Start training
-    try:
-        train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device, scheduler=scheduler, max_len=max_len, decay_rate=decay_rate)
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
-    torch.save(vae_model.state_dict(), 'vae_model2.pt')
+    vae_model.eval()  # Set model to evaluation mode
+
+    test_card = tokenizer.encode("<tl>Instant<\\tl><name>Lightning Bolt<\\name><mc>{R}<\\mc><ot>Lightning Bolt deals 3 damage to any target.<\\ot><eos>").ids
+    sos_token_id = tokenizer.token_to_id('<sos>') if '<sos>' in tokenizer.get_vocab() else 1
+    print(f"sos_token_id: {sos_token_id}")
+
+    test_card = torch.tensor([sos_token_id] + test_card, device=device).unsqueeze(0).to(device)
+    print(test_card)
+
+    #test_card = test_card[:,:max_len]
+    encoded = vae_model.encoder(test_card)
+
+    print(encoded[0].shape, encoded[1].shape)
+
+    z = vae_model.reparameterize(encoded[0], encoded[1])
+
+    print(z.shape)
+
+
+    out = vae_model.decoder(z, max_len=125)[1]
+
+    decoded_x = out.float()
+    left = decoded_x.view(-1, decoded_x.size(-1))
+    right = test_card.reshape(-1).to(device)[1:]
+    print(left.shape, right.shape)
+    recon_loss = nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id('<pad>'))(left, right)
+    print(recon_loss)
+
+
+    #simulate decoder
+
+    # # Initialize the output sequence with the <sos> token
+    # generated_sequence = torch.full((1, 1), sos_token_id, dtype=torch.long, device=device)
+    # BIG_OUTPUT_LOGIT_LIST = torch.empty((1, max_len, vae_model.decoder.output_dim), device=device)
+
+    # z = z.unsqueeze(1)
+
+    # embedded = vae_model.decoder.embedding(generated_sequence)
+    # embedded = vae_model.decoder.pos_encoder(embedded)
+    # tgt_mask = torch.triu(torch.ones(max_len, max_len, device=device) * float('-inf'), diagonal=1)
+
+    # current_mask = tgt_mask[:0 + 1, :0 + 1]
+    # decoded = vae_model.decoder.transformer_decoder(tgt=embedded, memory=z, tgt_mask=current_mask)
+
+    # output_logits = vae_model.decoder.fc_out(decoded[:, -1, :])
+    # BIG_OUTPUT_LOGIT_LIST[:, 0, :] = output_logits
+    # temperature = 0.8
+    # scaled_output_logits = output_logits / temperature
+    # best_tokens = torch.topk(torch.nn.functional.softmax(scaled_output_logits, dim=-1), 15, dim=-1).indices
+    # print(tokenizer.decode(best_tokens.squeeze().tolist(), skip_special_tokens=False))
+        
+
+    
+
+    
+    
+
+
+
+
+
+    

@@ -1,3 +1,4 @@
+from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,6 +12,8 @@ import json, requests, os
 import traceback
 import pandas
 from torch.cuda.amp import autocast, GradScaler
+from torch.cuda import memory_allocated, memory_reserved, memory_summary
+from transformers import get_linear_schedule_with_warmup
 
 # Dummy dataset for demonstration purposes
 class RandomDataset(Dataset):
@@ -162,9 +165,14 @@ class MagicCardDataset(Dataset):
         f.close()
         return corpus
 
+def log_memory():
+    allocated = memory_allocated() / (1024 ** 2)  # Convert to MB
+    reserved = memory_reserved() / (1024 ** 2)    # Convert to MB
+    print(f"Allocated: {allocated:.2f} MB, Reserved: {reserved:.2f} MB")
+    print(f"Max memory allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
 # Training loop with wandb logging
-def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cuda', scheduler=None, max_len=125, decay_rate=0.9995):
+def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cuda', max_len=125, decay_rate=0.9995):
     model.train()
     scaler = GradScaler()
     initial_teacher_forcing_ratio = 1.0
@@ -176,57 +184,75 @@ def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cu
         "epochs": num_epochs,
     })
     ctr = 1
-    for epoch in range(num_epochs):
-        total_loss = 0
 
-        # Wrap the dataloader with tqdm for batch-level progress bar
-        with tqdm(dataloader, unit="batch") as tepoch:
-            tepoch.set_description(f"Epoch {epoch+1}/{num_epochs}")
+    total_steps = num_epochs * len(dataloader)
+    print(f"Total steps: {total_steps}")
+    warmup_steps = min(total_steps // 15, 2000)
+    print(f"Warmup steps: {warmup_steps}")
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
+    try:
+        for epoch in range(num_epochs):
+            total_loss = 0
 
-            for batch_idx, x in enumerate(tepoch):
-                teacher_forcing_ratio = max(final_teacher_forcing_ratio, initial_teacher_forcing_ratio * (decay_rate ** ctr))
-                ctr += 1
-                x = x.to(device)
-                optimizer.zero_grad()
-                # Forward pass through the VAE
-                x = x[:,:max_len]
-                with autocast():
-                    decoded_x, logits, mu, logvar = model(x, target_seq=x, teacher_forcing_ratio=teacher_forcing_ratio)
-                    #print(decoded_x[:,:20])
-                    # Compute the VAE loss
-                    loss = model.vae_loss(logits, x, mu, logvar)
-                scaler.scale(loss).backward()
+            # Wrap the dataloader with tqdm for batch-level progress bar
+            with tqdm(dataloader, unit="batch") as tepoch:
+                tepoch.set_description(f"Epoch {epoch+1}/{num_epochs}")
 
-                # Backpropagation and optimization
-                #loss.backward()
-                # optimizer.step()
-                # 
-                
-                scaler.step(optimizer)
-                scaler.update()
+                for batch_idx, x in enumerate(tepoch):
+                    
+                    teacher_forcing_ratio = max(final_teacher_forcing_ratio, initial_teacher_forcing_ratio * (decay_rate ** ctr))
+                    ctr += 1
+                    x = x.to(device)
+                    optimizer.zero_grad()
+                    # Forward pass through the VAE
+                    #x = x[:,:max_len] #TODO: fix this chopping off <eos>
+                    with autocast():
+                        decoded_x, logits, mu, logvar = model(x, target_seq=x, teacher_forcing_ratio=teacher_forcing_ratio)
+                        #print(decoded_x[:,:20])
+                        # Compute the VAE loss
+                        loss = model.vae_loss(logits, x, mu, logvar)
+                    scaler.scale(loss).backward()
+                    
 
-                if scheduler:
-                     scheduler.step()
+                    # Backpropagation and optimization
+                    #loss.backward()
+                    # optimizer.step()
+                    # 
+                    if scheduler:
+                        scheduler.step()
 
-                # Accumulate the loss
-                total_loss += loss.item()
+                    scaler.step(optimizer)
+                    scaler.update()
 
-                # Log loss to wandb for this batch
-                wandb.log({"batch_loss": loss.item(), "epoch": epoch + 1, "batch": batch_idx + 1, "teacher_forcing_ratio": teacher_forcing_ratio, "lr": optimizer.param_groups[0]['lr']})
+                    
 
-                # Update tqdm with current loss
-                tepoch.set_postfix(loss=loss.item())
+                    # Accumulate the loss
+                    total_loss += loss.item()
 
-                if batch_idx % 10 == 0:
-                    log_generated_card(model, tokenizer, device)
+                    # Log loss to wandb for this batch
+                    wandb.log({"batch_loss": loss.item(), "epoch": epoch + 1, "step": epoch*len(dataloader) + batch_idx, "teacher_forcing_ratio": teacher_forcing_ratio, "lr": optimizer.param_groups[0]['lr']})
 
-        # Compute the average loss for this epoch
-        avg_loss = total_loss / len(dataloader)
-        
-        # Log average loss for the epoch
-        wandb.log({"epoch_loss": avg_loss, "epoch": epoch + 1})
+                    # Update tqdm with current loss
+                    tepoch.set_postfix(loss=loss.item())
 
-        print(f'Epoch {epoch+1}, Average Loss: {avg_loss:.4f}')
+                    
+
+                    if batch_idx % 10 == 0:
+                        log_generated_card(model, tokenizer, device)
+                        log_memory()
+
+            # Compute the average loss for this epoch
+            avg_loss = total_loss / len(dataloader)
+            
+            # Log average loss for the epoch
+            wandb.log({"epoch_loss": avg_loss, "epoch": epoch + 1})
+
+            print(f'Epoch {epoch+1}, Average Loss: {avg_loss:.4f}')
+    except KeyboardInterrupt:
+        print("\nTraining interrupted. Saving checkpoint...")
+        filename = f"canceled_checkpoint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
+        save_state(model, optimizer, scheduler, epoch, epoch*len(dataloader) + batch_idx, filename)
+        print(f"Checkpoint saved successfully to {filename}. Exiting.")
 
     # Finish the run (optional)
     wandb.finish()
@@ -250,17 +276,49 @@ def log_generated_card(model, tokenizer, device='cuda'):
 
     model.train()  # Switch back to training mode
 
+def save_state(vae_model, optimizer, scheduler, epoch, step, filename):
+    checkpoint = {
+        "epoch": epoch,
+        "step": step,
+        "model_state": vae_model.state_dict(),
+        "optimizer_state": optimizer.state_dict(),
+        "scheduler_state": scheduler.state_dict(),
+        "rng_state": torch.get_rng_state(),
+        "cuda_rng_state": torch.cuda.get_rng_state(),
+    }
+    os.makedirs("checkpoints", exist_ok=True)
+    torch.save(checkpoint, os.path.join("checkpoints", filename))
+def load_state(checkpoint_path, vae_model, optimizer, scheduler):
+    # Load the checkpoint
+    checkpoint = torch.load(checkpoint_path)
+    
+    # Restore the model state
+    vae_model.load_state_dict(checkpoint["model_state"])
+    
+    # Restore the optimizer state
+    optimizer.load_state_dict(checkpoint["optimizer_state"])
+    
+    # Restore the scheduler state
+    scheduler.load_state_dict(checkpoint["scheduler_state"])
+    
+    # Restore the RNG states for reproducibility
+    torch.set_rng_state(checkpoint["rng_state"])
+    torch.cuda.set_rng_state(checkpoint["cuda_rng_state"])
+    
+    # Return the epoch and step to resume training
+    return checkpoint["epoch"], checkpoint["step"]
+
 # Main training script
 def main():
     # Hyperparameters
-    embed_dim = 512  # Embedding dimension
-    num_heads = 8  # Number of attention heads
-    hidden_dim = 1024  # Feedforward network hidden dimension
-    num_layers = 10  # Number of transformer encoder/decoder layers
+    embed_dim = 768  # Embedding dimension
+    num_heads = 12  # Number of attention heads
+    hidden_dim = 3072  # Feedforward network hidden dimension
+    num_layers = 12  # Number of transformer encoder/decoder layers
     max_len = 125  # Maximum length of sequences
-    batch_size = 8
+    batch_size = 2
     num_epochs = 1
-    learning_rate = 0.0005
+    learning_rate = 0.001
     decay_rate = 0.9995
 
 
@@ -309,19 +367,16 @@ def main():
     
     # DataLoader (use a dummy dataset for now)
     dataset = MagicCardDataset(tokenizer, max_len=max_len)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=False, num_workers=4)
     
     # Optimizer
     optimizer = optim.Adam(vae_model.parameters(), lr=learning_rate)
-    scheduler = CosineAnnealingLR(optimizer, T_max=(num_epochs * len(dataset) // batch_size))
 
     # Start training
     try:
-        train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device, scheduler=scheduler, max_len=max_len, decay_rate=decay_rate)
+        train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device, max_len=max_len, decay_rate=decay_rate)
     except Exception as e:
         print(e)
         traceback.print_exc()
-    torch.save(vae_model.state_dict(), 'vae_model3.pt')
-
 if __name__ == "__main__":
     main()

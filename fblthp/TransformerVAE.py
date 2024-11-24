@@ -30,63 +30,6 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:x.size(1), :].permute(1, 0, 2)
         return x
 
-class PoolingTransformerEncoder(nn.Module):
-    def __init__(self, input_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len=125):
-        super(PoolingTransformerEncoder, self).__init__()
-        
-        # Embedding layer for input tokens
-        self.embedding = nn.Embedding(input_dim, embed_dim)
-        
-        # Positional encoding
-        self.pos_encoder = PositionalEncoding(embed_dim, max_len+2)
-        
-        # Transformer encoder layers with batch_first=True
-        encoder_layers = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim, batch_first=True)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_layers)
-        
-        # Linear layers for mean and log variance for reparameterization
-        self.fc_mu = nn.Linear(embed_dim, embed_dim)  # Mean
-        self.fc_logvar = nn.Linear(embed_dim, embed_dim)  # Log variance
-    
-    def forward(self, x):
-        # If x is 1D, add a batch dimension
-        if x.dim() == 1:
-            x = x.unsqueeze(0) # Shape: [batch_size, sequence_length]
-        
-        # Embedding tokens into continuous space
-        embedded = self.embedding(x)  # Shape: [batch_size, sequence_length, embed_dim]
-        
-        # Add positional encodings
-        embedded = self.pos_encoder(embedded)
-        
-        # Pass through the transformer encoder with batch_first=True
-        encoded = self.transformer_encoder(embedded)  # Shape: [batch_size, sequence_length, embed_dim]
-        
-        # Max pooling over the sequence length dimension
-        pooled = torch.max(encoded, dim=1).values  # Shape: [batch_size, embed_dim]
-
-        # # Average pooling over the sequence length dimension
-        # pooled = torch.mean(encoded, dim=1)  # Shape: [batch_size, embed_dim]
-
-        # --- Absolute pooling over the sequence length dimension ---
-        # absolute_max_pooled = torch.max(encoded.abs(), dim=1).values
-
-        # # Compute indices for the maximum absolute value in the sequence dimension
-        # max_indices = encoded.abs().argmax(dim=1, keepdim=True)  # Shape: [batch_size, 1, embed_dim]
-
-        # # Gather the values along the sequence dimension based on max_indices
-        # max_sign_values = torch.gather(encoded, 1, max_indices).squeeze(1)  # Shape: [batch_size, embed_dim]
-
-        # # Multiply absolute max pooled with the sign of these gathered max values
-        # pooled = absolute_max_pooled * torch.sign(max_sign_values)
-
-        ## --- End of absolute pooling ---
-
-        # Get mean and log variance for reparameterization
-        mu = self.fc_mu(pooled)  # Shape: [batch_size, embed_dim]
-        logvar = self.fc_logvar(pooled)  # Shape: [batch_size, embed_dim]
-        
-        return mu, logvar
 
 class PooledTransformerDecoder(nn.Module):
     def __init__(self, output_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len=125, dropout_rate=0.1):
@@ -221,6 +164,9 @@ class AverageAttentionEncoder(nn.Module):
         return mu, logvar
 
 
+class VAE(nn.Module):
+    def __init__(self):
+        pass
 
 
 class TransformerVAE(nn.Module):
@@ -268,8 +214,7 @@ class TransformerVAE(nn.Module):
         print("\nSummary:")
         print(f"  Number of parameters: {params}")
         print(f"  Number of buffers: {buffers}")
-        print(f"  Total Model Size: {total_size / (1024 ** 2):.2f} MB")  # Convert to megabytes (MB)
-
+        print(f"  Total Model Size: {total_size / (1024 ** 2):.2f} MB")  # Convert to megabytes (MB)\
 
     def forward(self, x, target_seq=None, max_len=None, teacher_forcing_ratio=0.5):
         # Encode the input to get mu and logvar
@@ -308,6 +253,9 @@ class TransformerVAE(nn.Module):
         return recon_loss + scaled_kld_loss, recon_loss, kld_loss, scaled_kld_loss
 
 
+
+class T5TransformerVAE(nn.Module):
+    pass
 
 # if __name__ == "__main__":
 #     # Define hyperparameters for the encoder

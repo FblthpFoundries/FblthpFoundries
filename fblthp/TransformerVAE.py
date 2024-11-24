@@ -62,117 +62,177 @@ class PoolingTransformerEncoder(nn.Module):
         # Pass through the transformer encoder with batch_first=True
         encoded = self.transformer_encoder(embedded)  # Shape: [batch_size, sequence_length, embed_dim]
         
-        # # Max pooling over the sequence length dimension
-        # pooled = torch.max(encoded, dim=1).values  # Shape: [batch_size, embed_dim]
+        # Max pooling over the sequence length dimension
+        pooled = torch.max(encoded, dim=1).values  # Shape: [batch_size, embed_dim]
 
         # # Average pooling over the sequence length dimension
         # pooled = torch.mean(encoded, dim=1)  # Shape: [batch_size, embed_dim]
 
-        # Take the absolute values and then find the max along the sequence length dimension
-        absolute_max_pooled = torch.max(encoded.abs(), dim=1).values
+        # --- Absolute pooling over the sequence length dimension ---
+        # absolute_max_pooled = torch.max(encoded.abs(), dim=1).values
 
-        # Compute indices for the maximum absolute value in the sequence dimension
-        max_indices = encoded.abs().argmax(dim=1, keepdim=True)  # Shape: [batch_size, 1, embed_dim]
+        # # Compute indices for the maximum absolute value in the sequence dimension
+        # max_indices = encoded.abs().argmax(dim=1, keepdim=True)  # Shape: [batch_size, 1, embed_dim]
 
-        # Gather the values along the sequence dimension based on max_indices
-        max_sign_values = torch.gather(encoded, 1, max_indices).squeeze(1)  # Shape: [batch_size, embed_dim]
+        # # Gather the values along the sequence dimension based on max_indices
+        # max_sign_values = torch.gather(encoded, 1, max_indices).squeeze(1)  # Shape: [batch_size, embed_dim]
 
-        # Multiply absolute max pooled with the sign of these gathered max values
-        pooled = absolute_max_pooled * torch.sign(max_sign_values)
+        # # Multiply absolute max pooled with the sign of these gathered max values
+        # pooled = absolute_max_pooled * torch.sign(max_sign_values)
 
+        ## --- End of absolute pooling ---
 
-        
         # Get mean and log variance for reparameterization
         mu = self.fc_mu(pooled)  # Shape: [batch_size, embed_dim]
         logvar = self.fc_logvar(pooled)  # Shape: [batch_size, embed_dim]
         
         return mu, logvar
 
-# TransformerDecoder with dynamic sequence generation
 class PooledTransformerDecoder(nn.Module):
-    def __init__(self, output_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len=125):
+    def __init__(self, output_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len=125, dropout_rate=0.1):
         super(PooledTransformerDecoder, self).__init__()
         self.output_dim = output_dim
+        
         # Embedding layer for the output tokens
         self.embedding = nn.Embedding(output_dim, embed_dim)
         
         # Positional encoding for the decoder
-        self.pos_encoder = PositionalEncoding(embed_dim, max_len+2)
+        self.pos_encoder = PositionalEncoding(embed_dim, max_len + 2)
         
         # Transformer decoder layers with batch_first=True
-        decoder_layers = nn.TransformerDecoderLayer(d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim, batch_first=True)
+        decoder_layers = nn.TransformerDecoderLayer(
+            d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim, batch_first=True, dropout=dropout_rate
+        )
         self.transformer_decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_layers)
         
         # Linear layer to map to vocabulary size
         self.fc_out = nn.Sequential(
-            #nn.LayerNorm(embed_dim),
+            nn.Dropout(dropout_rate),  # Dropout before the final layer
             nn.Linear(embed_dim, output_dim)
         )
+        
         self.tgt_mask = torch.triu(torch.ones(max_len, max_len, device=device) * float('-inf'), diagonal=1)
+        
+        # Dropout for embeddings and positional encodings
+        self.dropout = nn.Dropout(dropout_rate)
+        
         # Store maximum length and special tokens
         self.max_len = max_len
         self.sos_token = 1
         self.eos_token = 2
-    
+
     def forward(self, memory, target_seq=None, max_len=None, teacher_forcing_ratio=0.5):
-        """
-        memory: Latent vector from encoder, Shape: [batch_size, embed_dim]
-        max_len: Maximum sequence length for generation (if not provided, use self.max_len)
-        """
         max_len = max_len or self.max_len
-        
         batch_size = memory.size(0)
         device = memory.device
         
         # Initialize the output sequence with the <sos> token
         generated_sequence = torch.full((batch_size, 1), self.sos_token, dtype=torch.long, device=device)
-        
-        # Expand memory (latent vector) to match the sequence length
         BIG_OUTPUT_LOGIT_LIST = torch.empty((batch_size, max_len, self.output_dim), device=device)
         memory = memory.unsqueeze(1)
         
         for step in range(max_len):
             # Embed the current sequence
             embedded = self.embedding(generated_sequence)  # Shape: [batch_size, sequence_length, embed_dim]
+            embedded = self.dropout(embedded)  # Dropout on embeddings
             embedded = self.pos_encoder(embedded)  # Add positional encodings
+            embedded = self.dropout(embedded)  # Dropout after positional encodings
             
-            # Pass through the transformer decoder with batch_first=True
-            # Create a causal mask to prevent attending to future tokens
+            # Pass through the transformer decoder
             current_mask = self.tgt_mask[:step + 1, :step + 1]
             decoded = self.transformer_decoder(tgt=embedded, memory=memory, tgt_mask=current_mask)
-
             
-            # Predict the next token (only use the last token in the sequence)
+            # Predict the next token
             output_logits = self.fc_out(decoded[:, -1, :])  # Shape: [batch_size, output_dim]
             BIG_OUTPUT_LOGIT_LIST[:, step, :] = output_logits
+            
+            # Apply teacher forcing or auto-regressive generation
             temperature = 0.8
             scaled_output_logits = output_logits / temperature
-            next_token = torch.argmax(scaled_output_logits, dim=-1)  # Shape: [batch_size]
-
+            next_token = torch.argmax(scaled_output_logits, dim=-1)
             if target_seq is not None and torch.rand(1).item() < teacher_forcing_ratio:
-                # If target sequence is provided, use it as "ground truth"
                 next_token = target_seq[:, step]
-            
-            # Append the predicted token to the generated sequence
             generated_sequence = torch.cat([generated_sequence, next_token.unsqueeze(1)], dim=1)
             
-            # If all batches predict <eos>, stop early
+            # Stop early if all batches predict <eos>
             done = (next_token == self.eos_token)
             if done.all():
                 break
         
         returned = generated_sequence[:, 1:]  # Remove <sos> token
-        return returned, BIG_OUTPUT_LOGIT_LIST  # Return the generated sequence and logits
+        return returned, BIG_OUTPUT_LOGIT_LIST
+
+
+class AverageAttentionEncoder(nn.Module):
+    def __init__(self, input_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len=125, dropout_rate=0.1):
+        super(AverageAttentionEncoder, self).__init__()
+        
+        # Embedding layer for input tokens
+        self.embedding = nn.Embedding(input_dim, embed_dim)
+        
+        # Positional encoding
+        self.pos_encoder = PositionalEncoding(embed_dim, max_len + 2)
+        
+        # Transformer encoder layers with batch_first=True
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim, batch_first=True, dropout=dropout_rate
+        )
+        
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_layers)
+        
+        # Dropout after the embedding layer
+        self.dropout = nn.Dropout(dropout_rate)
+        
+        # Query and softmax for attention pooling
+        self.query = nn.Parameter(torch.randn(embed_dim))
+        self.softmax = nn.Softmax(dim=-1)
+        
+        # Linear layers for mean and log variance
+        self.fc_mu = nn.Linear(embed_dim, embed_dim)  # Mean
+        self.fc_logvar = nn.Linear(embed_dim, embed_dim)  # Log variance
+
+    def forward(self, x):
+        # If x is 1D, add a batch dimension
+        if x.dim() == 1:
+            x = x.unsqueeze(0)  # Shape: [batch_size, sequence_length]
+        
+        # Embedding tokens into continuous space
+        embedded = self.embedding(x)  # Shape: [batch_size, sequence_length, embed_dim]
+        embedded = self.dropout(embedded)  # Apply dropout to embeddings
+        
+        # Add positional encodings
+        embedded = self.pos_encoder(embedded)
+        
+        # Pass through the transformer encoder
+        encoded = self.transformer_encoder(embedded)  # Shape: [batch_size, sequence_length, embed_dim]
+        
+        # Attention-based pooling
+        attention_scores = torch.matmul(encoded, self.query)  # Shape: [batch_size, sequence_length]
+        attention_weights = self.softmax(attention_scores)  # Shape: [batch_size, sequence_length]
+        
+        # Weighted sum of encoded representations
+        attention_weights = attention_weights.unsqueeze(-1)  # Shape: [batch_size, sequence_length, 1]
+        pooled = torch.sum(encoded * attention_weights, dim=1)  # Shape: [batch_size, embed_dim]
+        
+        # Compute mean and log variance for reparameterization
+        mu = self.fc_mu(pooled)  # Shape: [batch_size, embed_dim]
+        logvar = self.fc_logvar(pooled)  # Shape: [batch_size, embed_dim]
+        
+        return mu, logvar
+
+
+
 
 class TransformerVAE(nn.Module):
-    def __init__(self, vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len=125):
+    def __init__(self, vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len=125, dropout=0.1):
         super(TransformerVAE, self).__init__()
         
         # Encoder (Pooling Transformer Encoder)
-        self.encoder = PoolingTransformerEncoder(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
+        #self.encoder = PoolingTransformerEncoder(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
+        self.encoder = AverageAttentionEncoder(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len, dropout)
         
         # Decoder (Pooled Transformer Decoder)
-        self.decoder = PooledTransformerDecoder(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
+        self.decoder = PooledTransformerDecoder(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len, dropout)
     
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)  # Standard deviation
@@ -225,43 +285,52 @@ class TransformerVAE(nn.Module):
     def generate(self, z, max_len=None):
         return self.decoder(z, target_seq=None, max_len=max_len)
     
-    def vae_loss(self, decoded_x, x, mu, logvar, kl_weight=1.0, pad_token_idx=0):
+    def vae_loss(self, decoded_x, x, mu, logvar, kl_weight=1.0, free_bits=0.1, pad_token_idx=0):
         """VAE loss function combining reconstruction loss and KL divergence with KL annealing"""
         decoded_x = decoded_x.float()
         left = decoded_x.view(-1, decoded_x.size(-1))
         right = x[:, 1:].reshape(-1).to(device)
         recon_loss = nn.CrossEntropyLoss(ignore_index=pad_token_idx)(left, right)
 
+        def free_bits_kl(mu, logvar, free_bits=0.1):
+            kl_loss_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+            regularized_kl_loss = torch.clamp(kl_loss_per_dim, min=free_bits)
+            return regularized_kl_loss.sum(dim=-1).mean()
+
+
         
         # KL divergence loss
-        kld_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        kld_loss = free_bits_kl(mu, logvar, free_bits=free_bits)
+
+
+        scaled_kld_loss = kl_weight * kld_loss
         
-        return recon_loss + kl_weight * kld_loss
+        return recon_loss + scaled_kld_loss, recon_loss, kld_loss, scaled_kld_loss
 
 
 
-if __name__ == "__main__":
-    # Define hyperparameters for the encoder
-    input_dim = 20000  # Example vocabulary size
-    embed_dim = 32  # Embedding size
-    num_heads = 8  # Number of attention heads in the transformer
-    hidden_dim = 1024  # Size of the feedforward layer in the transformer
-    num_layers = 2  # Number of transformer layers
-    max_len = 100  # Maximum length of sequences
+# if __name__ == "__main__":
+#     # Define hyperparameters for the encoder
+#     input_dim = 20000  # Example vocabulary size
+#     embed_dim = 32  # Embedding size
+#     num_heads = 8  # Number of attention heads in the transformer
+#     hidden_dim = 1024  # Size of the feedforward layer in the transformer
+#     num_layers = 2  # Number of transformer layers
+#     max_len = 100  # Maximum length of sequences
     
-    # Create an instance of the PoolingTransformerEncoder
-    encoder = PoolingTransformerEncoder(input_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len).to(device)
+#     # Create an instance of the PoolingTransformerEncoder
+#     encoder = PoolingTransformerEncoder(input_dim, embed_dim, num_heads, hidden_dim, num_layers, max_len).to(device)
     
-    # Generate a batch of random tokenized sequences as input (sequence_length, batch_size)
-    sequence_length = 50
-    batch_size = 2
-    input_tokens = torch.randint(0, input_dim, (sequence_length, batch_size)).to(device)  # Move to device
+#     # Generate a batch of random tokenized sequences as input (sequence_length, batch_size)
+#     sequence_length = 50
+#     batch_size = 2
+#     input_tokens = torch.randint(0, input_dim, (sequence_length, batch_size)).to(device)  # Move to device
     
-    # Run the forward pass of the encoder
-    mu, logvar = encoder(input_tokens)
+#     # Run the forward pass of the encoder
+#     mu, logvar = encoder(input_tokens)
     
-    # Print out the results to verify shapes
-    print(mu)
-    print(logvar)
-    print(f"Mean (mu) shape: {mu.shape}")  # Should be [batch_size, embed_dim]
-    print(f"Log variance (logvar) shape: {logvar.shape}")  # Should be [batch_size, embed_dim]
+#     # Print out the results to verify shapes
+#     print(mu)
+#     print(logvar)
+#     print(f"Mean (mu) shape: {mu.shape}")  # Should be [batch_size, embed_dim]
+#     print(f"Log variance (logvar) shape: {logvar.shape}")  # Should be [batch_size, embed_dim]

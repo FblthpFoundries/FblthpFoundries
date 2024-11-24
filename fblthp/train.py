@@ -171,114 +171,138 @@ def log_memory():
     print(f"Allocated: {allocated:.2f} MB, Reserved: {reserved:.2f} MB")
     print(f"Max memory allocated: {torch.cuda.max_memory_allocated() / 1024 ** 2:.2f} MB")
 
-# Training loop with wandb logging
-def train_vae(model, dataloader, optimizer, tokenizer, num_epochs=10, device='cuda', max_len=125, decay_rate=0.9995):
+
+
+def compute_beta(step, beta_start, beta_end, warmup_steps):
+    """
+    Compute the KL weight (beta) based on the current step.
+    Args:
+        step (int): Current training step.
+        beta_start (float): Initial beta value.
+        beta_end (float): Final beta value.
+        warmup_steps (int): Number of steps for annealing.
+    Returns:
+        float: Annealed beta value.
+    """
+    if step >= warmup_steps:
+        return beta_end
+    return beta_start + (beta_end - beta_start) * (step / warmup_steps)
+
+def train_vae(model, dataloader, optimizer, tokenizer, num_steps=50000, device='cuda', max_len=125, decay_rate=0.9995,
+              batch_size=8, lr_warmup_steps=5000, beta_start=0.0, beta_end=0.07, beta_warmup_steps=5000, 
+              initial_teacher_forcing_ratio=1.0, final_teacher_forcing_ratio=0.1, free_bits=0.2):
     model.train()
     scaler = GradScaler()
-    initial_teacher_forcing_ratio = 1.0
-    final_teacher_forcing_ratio = 0.1
 
-    # Log hyperparameters if necessary
+    # Initialize the learning rate scheduler outside the loop
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=lr_warmup_steps, num_training_steps=num_steps
+    )
+
+    # Log hyperparameters
     wandb.config.update({
         "learning_rate": optimizer.defaults["lr"],
-        "epochs": num_epochs,
+        "total_steps": num_steps,
+        "batch_size": batch_size,
+        "beta_start": beta_start,
+        "beta_end": beta_end,
+        "beta_warmup_steps": beta_warmup_steps,
     })
-    ctr = 1
 
-    total_steps = num_epochs * len(dataloader)
-    print(f"Total steps: {total_steps}")
-    warmup_steps = min(total_steps // 15, 2000)
-    print(f"Warmup steps: {warmup_steps}")
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
-    try:
-        for epoch in range(num_epochs):
-            total_loss = 0
+    # Initialize a single tqdm progress bar for the entire training process
+    with tqdm(total=num_steps, unit="step") as pbar:
+        step = 0
+        data_iter = iter(dataloader)  # Create a single iterator for the dataloader
+        try:
+            while step < num_steps:
+                try:
+                    x = next(data_iter)  # Get the next batch
+                except StopIteration:
+                    # Restart the dataloader when it runs out of batches
+                    data_iter = iter(dataloader)
+                    x = next(data_iter)
 
-            # Wrap the dataloader with tqdm for batch-level progress bar
-            with tqdm(dataloader, unit="batch") as tepoch:
-                tepoch.set_description(f"Epoch {epoch+1}/{num_epochs}")
+                x = x.to(device)
+                # Compute the teacher forcing ratio
+                teacher_forcing_ratio = max(
+                    final_teacher_forcing_ratio, 
+                    initial_teacher_forcing_ratio * (decay_rate ** step)
+                )
 
-                for batch_idx, x in enumerate(tepoch):
-                    
-                    teacher_forcing_ratio = max(final_teacher_forcing_ratio, initial_teacher_forcing_ratio * (decay_rate ** ctr))
-                    ctr += 1
-                    x = x.to(device)
-                    optimizer.zero_grad()
-                    # Forward pass through the VAE
-                    #x = x[:,:max_len] #TODO: fix this chopping off <eos>
-                    with autocast():
-                        decoded_x, logits, mu, logvar = model(x, target_seq=x, teacher_forcing_ratio=teacher_forcing_ratio)
-                        #print(decoded_x[:,:20])
-                        # Compute the VAE loss
-                        loss = model.vae_loss(logits, x, mu, logvar)
-                    scaler.scale(loss).backward()
-                    
+                optimizer.zero_grad()
 
-                    # Backpropagation and optimization
-                    #loss.backward()
-                    # optimizer.step()
-                    # 
-                    if scheduler:
-                        scheduler.step()
+                # Forward pass through the VAE
+                with autocast():
+                    decoded_x, logits, mu, logvar = model(x, target_seq=x, teacher_forcing_ratio=teacher_forcing_ratio)
+                    beta = compute_beta(step, beta_start, beta_end, beta_warmup_steps)
+                    loss, ce_loss, kl_loss, scaled_kld_loss = model.vae_loss(logits, x, mu, logvar, kl_weight=beta, free_bits=free_bits)
 
-                    scaler.step(optimizer)
-                    scaler.update()
+                # Backward pass and optimization
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
 
-                    
+                # Step the learning rate scheduler
+                scheduler.step()
 
-                    # Accumulate the loss
-                    total_loss += loss.item()
+                # Log stats to wandb for this batch
+                wandb.log({
+                    "loss": loss.item(),
+                    "step": step,
+                    "teacher_forcing_ratio": teacher_forcing_ratio,
+                    "lr": scheduler.get_last_lr()[0],  # Log the learning rate
+                    "ce_loss": ce_loss.item(),
+                    "kl_loss": kl_loss.item(),
+                    "scaled_kl_loss": scaled_kld_loss.item(),
+                    "beta": beta,
+                })
 
-                    # Log loss to wandb for this batch
-                    wandb.log({"batch_loss": loss.item(), "epoch": epoch + 1, "step": epoch*len(dataloader) + batch_idx, "teacher_forcing_ratio": teacher_forcing_ratio, "lr": optimizer.param_groups[0]['lr']})
+                # Update tqdm with the current step and loss
+                pbar.set_postfix(loss=loss.item())
+                pbar.update(1)
 
-                    # Update tqdm with current loss
-                    tepoch.set_postfix(loss=loss.item())
+                # Log additional information at intervals
+                if step % 100 == 0:
+                    log_generated_card(model, tokenizer, device, n=10)
+                    log_memory()
 
-                    
+                step += 1  # Increment step counter
 
-                    if batch_idx % 10 == 0:
-                        log_generated_card(model, tokenizer, device)
-                        log_memory()
+        except KeyboardInterrupt:
+            print("\nTraining interrupted. Saving checkpoint...")
+            filename = f"canceled_checkpoint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
+            save_state(model, optimizer, scheduler, None, step, filename)
+            print(f"Checkpoint saved successfully to {filename}. Exiting.")
 
-            # Compute the average loss for this epoch
-            avg_loss = total_loss / len(dataloader)
-            
-            # Log average loss for the epoch
-            wandb.log({"epoch_loss": avg_loss, "epoch": epoch + 1})
+        print("Training complete!")
+        filename = f"final_checkpoint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
+        save_state(model, optimizer, scheduler, step, filename)
+        print(f"Final checkpoint saved successfully to {filename}.")
 
-            print(f'Epoch {epoch+1}, Average Loss: {avg_loss:.4f}')
-    except KeyboardInterrupt:
-        print("\nTraining interrupted. Saving checkpoint...")
-        filename = f"canceled_checkpoint_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
-        save_state(model, optimizer, scheduler, epoch, epoch*len(dataloader) + batch_idx, filename)
-        print(f"Checkpoint saved successfully to {filename}. Exiting.")
-
-    # Finish the run (optional)
-    wandb.finish()
+        # Finish the run (optional)
+        wandb.finish()
 
 # Function to generate and log a card to wandb
-def log_generated_card(model, tokenizer, device='cuda'):
+def log_generated_card(model, tokenizer, device='cuda', n=1):
     model.eval()  # Set model to evaluation mode
-    
-    # Generate a random latent vector (or sample from the latent space)
-    latent_vector = torch.randn(1, model.encoder.fc_mu.out_features).to(device)
-    
-    # Generate a card from the latent vector
-    generated_token_ids = model.generate(latent_vector, max_len=50)[0]  # Adjust max_len if needed
-    # Convert token IDs back to human-readable text (you need your tokenizer for this)
-    generated_text = tokenizer.decode(generated_token_ids.squeeze().tolist(), skip_special_tokens=False)
-    
-    # Log the generated card text to wandb
-    wandb.log({"generated_card": generated_text})
-    print("ids[:20]:", generated_token_ids.squeeze().tolist()[:20])
-    print("decoded text: ", generated_text.replace('<pad>', '').replace('<eos>', ''))
+    for i in range(n):
+        # Generate a random latent vector (or sample from the latent space)
+        latent_vector = torch.randn(1, model.encoder.fc_mu.out_features).to(device)
+        
+        # Generate a card from the latent vector
+        generated_token_ids = model.generate(latent_vector, max_len=50)[0]  # Adjust max_len if needed
+        # Convert token IDs back to human-readable text
+        generated_text = tokenizer.decode(generated_token_ids.squeeze().tolist(), skip_special_tokens=False)
+        
+        # Log the generated card text to wandb
+        #wandb.log({"generated_card": generated_text})
+        print("ids[:20]:", generated_token_ids.squeeze().tolist()[:20])
+        print("decoded text: ", generated_text.replace('<pad>', '').replace('<eos>', ''))
 
     model.train()  # Switch back to training mode
 
-def save_state(vae_model, optimizer, scheduler, epoch, step, filename):
+def save_state(vae_model, optimizer, scheduler, step, filename):
     checkpoint = {
-        "epoch": epoch,
         "step": step,
         "model_state": vae_model.state_dict(),
         "optimizer_state": optimizer.state_dict(),
@@ -311,15 +335,30 @@ def load_state(checkpoint_path, vae_model, optimizer, scheduler):
 # Main training script
 def main():
     # Hyperparameters
-    embed_dim = 768  # Embedding dimension
-    num_heads = 12  # Number of attention heads
-    hidden_dim = 3072  # Feedforward network hidden dimension
-    num_layers = 12  # Number of transformer encoder/decoder layers
+    embed_dim = 256  # Embedding dimension
+    num_heads = 8  # Number of attention heads
+    hidden_dim = 2048  # Feedforward network hidden dimension
+    num_layers = 6  # Number of transformer encoder/decoder layers
     max_len = 125  # Maximum length of sequences
-    batch_size = 2
-    num_epochs = 1
-    learning_rate = 0.001
-    decay_rate = 0.9995
+    batch_size = 16 # Batch Size
+    accumulation_steps = 4 # Gradient accumulation steps
+    dropout = 0.1 # Dropout rate
+
+    num_steps = 50000   # Number of training steps
+
+    learning_rate = 0.00025  # Learning rate (maximum)
+
+    initial_teacher_forcing_ratio = 1.0 # Initial teacher forcing ratio
+    final_teacher_forcing_ratio = 0.1 # Final teacher forcing ratio
+    decay_rate = 0.9995 # Decay rate for teacher forcing ratio
+
+    beta_start = 0.0
+    beta_end = 0.07
+    beta_warmup_steps = 5000
+
+    free_bits = 0.2
+
+    lr_warmup_steps=5000
 
 
     vocab_size = 20000
@@ -333,7 +372,7 @@ def main():
             "<tl>","<name>","<mc>","<ot>","<power>","<toughness>","<loyalty>","<ft>", "<nl>",
             "<\\tl>", "<\\name>", "<\\mc>", "<\\ot>", "<\\power>", "<\\toughness>", "<\\loyalty>", "<\\ft>",
             "{W}", "{U}", "{B}", "{R}", "{G}", "{C}", "{X}", "{1}", "{2}", "{3}", "{4}", "{5}", "{6}", "{7}", 
-            "{8}", "{9}", "{10}", "{11}", "{12}", "{13}", "{14}", "{15}", "+1/+1"
+            "{8}", "{9}", "{10}", "{11}", "{12}", "{13}", "{14}", "{15}", "+1/+1", "{T}"
         ])
 
         trainer = trainers.WordPieceTrainer(vocab_size=vocab_size, special_tokens=special_tokens)
@@ -349,7 +388,7 @@ def main():
 
     wandb.init(project="TransformerVAE", config={
     "learning_rate": learning_rate,
-    "epochs": num_epochs,
+    "steps": num_steps,
     "batch_size": batch_size,
     "embed_dim": embed_dim,
     "num_heads": num_heads,
@@ -358,7 +397,7 @@ def main():
     "max_len": max_len,
     })
     # Create the VAE model
-    vae_model = TransformerVAE(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len)
+    vae_model = TransformerVAE(vocab_size, embed_dim, num_heads, hidden_dim, num_layers, max_len, dropout=dropout)
     vae_model.print_model_size()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     vae_model = vae_model.to(device)
@@ -374,7 +413,9 @@ def main():
 
     # Start training
     try:
-        train_vae(vae_model, dataloader, optimizer, tokenizer, num_epochs=num_epochs, device=device, max_len=max_len, decay_rate=decay_rate)
+        train_vae(vae_model, dataloader, optimizer, tokenizer, num_steps=num_steps, device=device, max_len=max_len, decay_rate=decay_rate, \
+                  batch_size=batch_size, lr_warmup_steps=lr_warmup_steps, beta_start=beta_start, beta_end=beta_end, beta_warmup_steps=beta_warmup_steps, \
+                    initial_teacher_forcing_ratio=initial_teacher_forcing_ratio, final_teacher_forcing_ratio=final_teacher_forcing_ratio, free_bits=free_bits)
     except Exception as e:
         print(e)
         traceback.print_exc()

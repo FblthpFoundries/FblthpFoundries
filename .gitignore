@@ -2,6 +2,7 @@ fblthp/card-server/secret_tokens.py
 fblthp/magic_mike/*
 cards.csv
 corpus.csv
+labeled.csv
 *.pyc
 *.mse-set
 fblthp/out/*
@@ -21,3 +22,7 @@ fblthp/wandb/*
 fblthp/output.txt
 *.pt
 fblthp/tokenizer/*
+fblthp/.ipynb_checkpoints/*
+fblthp/bert-fine-tuned-mtg-5/*
+fblthp/gpt2-fine-tuned-mtg/*
+fblthp/logs/*

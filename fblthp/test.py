@@ -1,257 +1,341 @@
-from tokenizers import Tokenizer
+import warnings
+# Suppress specific warnings
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=r"Using `TRANSFORMERS_CACHE` is deprecated.*"
+)
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=r"You are using `torch.load` with `weights_only=False`"
+)
+from TransformerVAE import TransformerVAE
 import torch
+import os
+from tokenizers import Tokenizer
+from torch.utils.data import DataLoader, Dataset, random_split
+from train import MagicCardDataset
+from tabulate import tabulate
+from collections import defaultdict
+from tqdm import tqdm
+import re
 import numpy as np
+import Levenshtein
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
-import os
-import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.utils.data import DataLoader
-import torch
-import torch.nn as nn
-from collections import defaultdict
+import pandas as pd
+import ast
+import math
 
-import re
-import argparse
+class LabeledMagicCardDataset(Dataset):
+    def __init__(self, max_len=125, target="corpus.csv"):
+        self.max_len = max_len
+        self.corpus_dataframe = pd.read_csv(target)
 
-from TransformerVAE import PositionalEncoding, TransformerVAE
-from train import MagicCardDataset
+    def __len__(self):
+        return len(self.corpus_dataframe)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
+    def __getitem__(self, idx):
+        row = self.corpus_dataframe.iloc[idx]
+        tolist = row.tolist()
+        return tolist
 
-# Assuming your TransformerVAE model and data loader are set up like this
-# model: the TransformerVAE model
-# dataloader: data loader providing batches of cards
-def _parse_card_data(self, input_text):
-    cards = []
-    
-    # Define patterns for each part of the card
-    card_pattern = r'<tl>(.*?)<\\tl>'
-    name_pattern = r'<name>(.*?)<\\name>'
-    mc_pattern = r'<mc>(.*?)<\\mc>'
-    ot_pattern = r'<ot>(.*?)<\\ot>'
-    power_pattern = r'<power>(.*?)<\\power>'
-    toughness_pattern = r'<toughness>(.*?)<\\toughness>'
-    loyalty_pattern = r'<loyalty>(.*?)<\\loyalty>'
-    ft_pattern = r'<ft>(.*?)<\\ft>'
-    
-    # Split the input into sections for each card
-    card_matches = re.findall(r'<tl>.*?(?=<tl>|$)', input_text, re.DOTALL)
-    
-    for card_match in card_matches:
-        card = {}
-        
-        # Extract each component using the patterns
-        if not re.search(card_pattern, card_match):
-            continue
-        card['type_line'] = re.search(card_pattern, card_match).group(1).strip()
-        
-        name = re.search(name_pattern, card_match)
-        card['name'] = name.group(1).strip() if name else None
-        
-        mc = re.search(mc_pattern, card_match)
-        card['mana_cost'] = mc.group(1).strip() if mc else None
-        
-        ot = re.search(ot_pattern, card_match)
-        card['oracle_text'] = re.sub(r'<nl>', '\n', ot.group(1).strip()) if ot else None
-        if not card['oracle_text'] :
-            continue
-        card['oracle_text'] = card['oracle_text'].replace('<br>', '\n')
-        if not card['name']:
-            continue
-        card['oracle_text'] = card['oracle_text'].replace('~', card['name'])
-        
-        power = re.search(power_pattern, card_match)
-        card['power'] = power.group(1).strip() if power else None
-        
-        toughness = re.search(toughness_pattern, card_match)
-        card['toughness'] = toughness.group(1).strip() if toughness else None
-        
-        loyalty = re.search(loyalty_pattern, card_match)
-        card['loyalty'] = loyalty.group(1).strip() if loyalty else None
-        
-        ft = re.search(ft_pattern, card_match)
-        card['flavor_text'] = re.sub(r'<nl>', '\n', ft.group(1).strip()) if ft else None
-        
-        cards.append(card)
-    
-    return cards
-def get_color(mana_cost):
-    color = []
-    if 'W' in mana_cost:
-        color.append('W')
-    if 'U' in mana_cost:
-        color.append('U')
-    if 'B' in mana_cost:
-        color.append('B')
-    if 'R' in mana_cost:
-        color.append('R')
-    if 'G' in mana_cost:
-        color.append('G')
-    if len(color) == 0:
-        color.append('C')
-    return color
-def get_cmc(mana_cost):
-    cmc = 0
-    for c in mana_cost:
-        if c.isnumeric():
-            cmc += int(c)
-        elif c in ['W', 'U', 'B', 'R', 'G', 'C']:
-            cmc += 1
-    return cmc
-def visualize_latent_space(model, dataloader, n_samples=1000, perplexity=30, learning_rate=200):
-    """
-    Visualize the latent space using t-SNE.
-    
-    Parameters:
-    - model: Your trained TransformerVAE model.
-    - dataloader: Dataloader providing batches of input cards.
-    - n_samples: Number of cards to sample for the t-SNE plot.
-    - perplexity: t-SNE perplexity (try values around 30-50).
-    - learning_rate: t-SNE learning rate (200 is usually a good start).
-    """
-    model.eval()
-    latent_vectors = []
-    labels = defaultdict(list)
-    cats = ["color", "mana_cost", "power", "toughness", "loyalty"]
-    
-    with torch.no_grad():
-        for i, card in enumerate(dataloader):
-            if i * dataloader.batch_size >= n_samples:
+
+
+
+def eval_test_func(model):
+    return {"loss": -1}
+
+
+def recon_loss(model, test_dataloader):
+    l_recon = 0.0
+    for test_x in test_dataloader:
+        test_x = test_x.to(device)
+        test_logits, test_mu, test_logvar = model(test_x, target_seq=test_x)
+        total, recon, scaled, kl = model.vae_loss(test_logits, test_x, test_mu, test_logvar, kl_weight=0.03, free_bits=0.2)
+        l_recon += recon.item()
+    l_recon /= len(test_dataloader)
+    return {"loss": l_recon}
+
+def attribute_reconstruction_loss(model, test_dataloader, tokenizer, n=32):
+    def yoink(text, attribute):
+        pattern = fr"<{attribute}>(.*?)<\\{attribute}>"
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip()
+        return None
+
+    model.eval()  # Set model to evaluation mode
+
+    intermediates = defaultdict(list)
+
+
+    i = 0
+    pbar = tqdm(total=n, desc="Attribute Reconstruction Loss")
+    while i < n:
+        x = next(iter(test_dataloader))
+        num_examples = x.shape[0]
+
+        x = x.to(device)
+        mu, logvar = model.encoder(x)
+        z = model.reparameterize(mu, logvar)
+        reconstructed_token_ids = model.generate(z, max_len=125)
+
+        for example in range(num_examples):
+            reconstructed_text = tokenizer.decode(reconstructed_token_ids[example].squeeze().tolist(), skip_special_tokens=False)
+            original_text = tokenizer.decode(x[example].squeeze().tolist(), skip_special_tokens=False)
+            #Mana cost
+
+            
+            left = yoink(original_text, "mc")
+            if not left:
+                left = "0"
+            else:
+                left = left.replace("}", "").replace("{", "")
+            right = yoink(reconstructed_text, "mc")
+            
+            if not right:
+                right = "0"
+            else:
+                right = right.replace("}", "").replace("{", "")
+            left_cmc = sum([int(x) if x.isdigit() else 1 for x in left.replace(" ", "")])
+            right_cmc = sum([int(x) if x.isdigit() else 1 for x in right.replace(" ", "")])
+
+            intermediates["MC Levenshtein"].append(Levenshtein.ratio(left, right))
+            intermediates["CMC MSE"].append((left_cmc - right_cmc)**2)
+
+            #Power
+
+            left = yoink(original_text, "power")
+            if not left:
+                left = "0"
+            else:
+                left = left.replace("}", "").replace("{", "").replace("*", "0")
+            right = yoink(reconstructed_text, "power")
+            if not right:
+                right = "0"
+            else:
+                right = right.replace("}", "").replace("{", "").replace("*", "0")
+            intermediates["Power MSE"].append((int(left) - int(right))**2)
+
+            #Toughness
+
+            left = yoink(original_text, "toughness")
+            if not left:
+                left = "0"
+            else:
+                left = left.replace("}", "").replace("{", "").replace("*", "0")
+            right = yoink(reconstructed_text, "toughness")
+            if not right:
+                right = "0"
+            else:
+                right = right.replace("}", "").replace("{", "").replace("*", "0")
+            intermediates["Toughness MSE"].append((int(left) - int(right))**2)
+
+            i += 1
+            pbar.update(1)
+            if i >= n:
                 break
-            # Encode to get the latent representation
-            
-            labels["power"].append(parsed["power"] if parsed["power"] else -1)
-            labels["toughness"].append(parsed["toughness"] if parsed["toughness"] else -1)
-            labels["loyalty"].append(parsed["loyalty"] if parsed["loyalty"] else -1)
-            labels["color"].append(get_color(parsed["mana_cost"]))
-            labels["cmc"].append(get_cmc(parsed["mana_cost"]))
+
+    pbar.close()
+    returned = {}
+
+    for attribute in intermediates:
+        returned[attribute] = np.mean(intermediates[attribute])
+
+    return returned
 
 
+def tsne_graphs(model, test_dataloader, tokenizer, n=32):
+    
+    def yoink(text, attribute):
+        pattern = fr"<{attribute}>(.*?)<\\{attribute}>"
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip()
+        return None
+    def rgb_to_hex(r, g, b):
+        return "#{:02x}{:02x}{:02x}".format(r, g, b)
+    
+    colors_dict = {
+        "W": (255, 255, 240),
+        "U": (0, 115, 230),
+        "B": (15, 15, 15),
+        "R": (200, 0, 0),
+        "G": (0, 150, 75),
+        "C": (192, 192, 192),
+    }
 
-            latent = model.encode(card.to(model.device))  # Change to your model's encode method
-            latent_vectors.append(latent.cpu().numpy())
-            
+    pbar = tqdm(total=n, desc="t-SNE Graphs")
+    bigboy = torch.zeros((n, model.encoder.fc_mu.out_features), device=device)
+    colors = []
+    cmcs = []
+    i = 0
+    while i < n:
+        x = next(iter(test_dataloader))
+        x_i = x["ids"]
 
+        mu, logvar = model.encoder(x_i)
+        z = model.reparameterize(mu, logvar)
 
-    # Stack all latent vectors for t-SNE
-    latent_vectors = np.concatenate(latent_vectors, axis=0)
+        needed = min(n - i, x_i.shape[0])
 
-    # Run t-SNE on the latent vectors
-    tsne = TSNE(n_components=2, perplexity=perplexity, learning_rate=learning_rate, random_state=42)
-    tsne_results = tsne.fit_transform(latent_vectors)
+        bigboy[i:i+needed, :] = z[:needed, :]
 
-    # Plotting
-    plt.figure(figsize=(12, 8))
-    scatter = plt.scatter(tsne_results[:, 0], tsne_results[:, 1], c=labels, cmap='viridis', alpha=0.7)
-    plt.colorbar(scatter, label='Card Attributes')  # Only if labels are provided
-    plt.title("t-SNE of TransformerVAE Latent Space")
-    plt.xlabel("t-SNE Component 1")
-    plt.ylabel("t-SNE Component 2")
+        for j in range(x_i.shape[0]):
+            meed = []
+            mc = x["mc"][j]
+            if not isinstance(mc, str) and math.isnan(mc):
+                colors.append(rgb_to_hex(0, 255, 255))
+            else:
+                mc = mc.replace(" ", "").replace("{", "").replace("}", "")
+                for chr in mc:
+                    if chr.upper() in colors_dict:
+                        meed.append(colors_dict[chr.upper()])
+                if len(meed) == 0:
+                    meed.append(colors_dict["C"])
+                mean_color = np.mean(meed, axis=0).astype(int)
+                hex = rgb_to_hex(*mean_color)
+                colors.append(hex)
+
+            cmcs.append(x["cmc"][j])
+            i += 1
+            pbar.update(1)
+            if i >= n:
+                break
+
+    print("Starting plot")
+    print(colors[:10])
+    tsne = TSNE(n_components=2, random_state=42)
+    z_embedded = tsne.fit_transform(bigboy.cpu().detach().numpy())
+    plt.scatter(z_embedded[:, 0], z_embedded[:, 1], c=colors)
+    plt.title("t-SNE of Latent Space")
+    plt.show()
+    plt.scatter(z_embedded[:, 0], z_embedded[:, 1], c=cmcs, cmap='viridis')
+    plt.title("t-SNE of Latent Space")
     plt.show()
 
-def test_cards(n, vae_model, tokenizer):
-    for i in range(n):
-        # Generate a random latent vector (or sample from the latent space)
-        latent_vector = torch.randn(1, vae_model.encoder.fc_mu.out_features).to(device)
-        # Generate a card from the latent vector
-        generated_token_ids = vae_model.generate(latent_vector, max_len=50)[0]  # Adjust max_len if needed
-        # Convert token IDs back to human-readable text (you need your tokenizer for this)
-        generated_text = tokenizer.decode(generated_token_ids.squeeze().tolist(), skip_special_tokens=False)
-        
-        # Log the generated card text to wandb
-        print("ids[:20]:", generated_token_ids.squeeze().tolist()[:20])
-        print("decoded text: ", generated_text.replace('<pad>', '').replace('<eos>', ''))
+
+    return {}
 
 if __name__ == '__main__':
-    max_len = 125
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+    MODELS_DIR = "checkpoints"
+    models = {
+        "512d-best": "12-3-best.pt",
+        "512d-overfit": "12-3-overfit.pt",
+        "768d-best": "12-5-best.pt",
+        "768d-overfit": "12-5-overfit.pt",
+        "1024d-best": "12-5-1024dim-best.pt",
+        "1024d-4l-encoder-best": "12-6-4layerencoder-best.pt",
+        }
+
+
+
 
     tokenizer = Tokenizer.from_file("wordpiece_tokenizer.json")
-    dataset = MagicCardDataset(tokenizer, max_len=max_len) # just here in order to make corpus.csv on a first go (bad code but it works)
 
+    seed = 42
+    test_set_portion = 0.05
+    batch_size = 32
 
-    # Argument parser
-    parser = argparse.ArgumentParser(description='Load a TransformerVAE model from a file.')
-    parser.add_argument('--model_path', type=str, required=True, help='Path to the model file.')
+    # DataLoader
+    dataset = LabeledMagicCardDataset(max_len=125, target="labeled.csv")
 
-    args = parser.parse_args()
+    # Get the training dataset
+    train_size = int(len(dataset) * (1 - test_set_portion))
+    test_size = len(dataset) - train_size
+    torch.manual_seed(seed) # Seed so the random split is the same and doesn't contaminate when reloading a model
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
 
-    # Load the model
-    checkpoint = torch.load(args.model_path)
-    vae_model = TransformerVAE(vocab_size=20000, embed_dim=768, \
-                               num_heads=12, hidden_dim=3072, num_layers=12, max_len=125)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, 
+                                pin_memory=True, num_workers=2, persistent_workers=True)
     
-    vae_model.load_state_dict(checkpoint["model_state"])
-    vae_model.encoder.pos_encoder = PositionalEncoding(768, max_len*2)
-    vae_model.decoder.pos_encoder = PositionalEncoding(768, max_len*2)
-    vae_model.print_model_size()
-    vae_model = vae_model.to(device)
-    
-    
-    # DataLoader (use a dummy dataset for now)
-    dataset = MagicCardDataset(tokenizer, max_len=max_len)
-    #dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+    def collate_fn(batch):
+        ids = [ast.literal_eval(x[1]) for x in batch]
+        ids = torch.tensor(ids, device=device)
+        originals = [x[0] for x in batch]
+        mc = [x[2] for x in batch]
+        power = [x[3] for x in batch]
+        toughness = [x[4] for x in batch]
+        cmc = [x[5] for x in batch]
 
-    vae_model.eval()  # Set model to evaluation mode
+        return {
+            "ids": ids, 
+            "originals": originals,
+            "mc": mc,
+            "power": power,
+            "toughness": toughness,
+            "cmc": cmc,
+            }
+    return_test_fns = [
+        #("Test Function", eval_test_func, {}),
+        #("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
+        #("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300})
+        ("TSNE Graphs", tsne_graphs, {"test_dataloader": DataLoader(test_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn), "tokenizer": tokenizer, "n": 500})
+    ]
 
-    test_card = tokenizer.encode("<tl>Instant<\\tl><name>Lightning Bolt<\\name><mc>{R}<\\mc><ot>Lightning Bolt deals 3 damage to any target.<\\ot><eos>").ids
-    sos_token_id = tokenizer.token_to_id('<sos>') if '<sos>' in tokenizer.get_vocab() else 1
-    print(f"sos_token_id: {sos_token_id}")
-
-    test_card = torch.tensor([sos_token_id] + test_card, device=device).unsqueeze(0).to(device)
-    print(test_card)
-
-    #test_card = test_card[:,:max_len]
-    encoded = vae_model.encoder(test_card)
-
-    print(encoded[0].shape, encoded[1].shape)
-
-    z = vae_model.reparameterize(encoded[0], encoded[1])
-
-    print(z.shape)
+    results = {name: [] for name, _, _ in return_test_fns}
 
 
-    out = vae_model.decoder(z, max_len=125)[1]
+    for model_name in models:
+        print(f"Testing model {model_name}")
+        #Load model checkpoint
+        checkpoint = torch.load(os.path.join(MODELS_DIR, models[model_name]))
+        vocab_size = checkpoint["hypers"]["vocab_size"]
+        embed_dim = checkpoint["hypers"]["embed_dim"]
+        num_heads = checkpoint["hypers"]["num_heads"]
+        hidden_dim = checkpoint["hypers"]["hidden_dim"]
+        if "num_layers" in checkpoint["hypers"]:
+            num_decoder_layers = checkpoint["hypers"]["num_layers"]
+            num_encoder_layers = checkpoint["hypers"]["num_layers"]
+        else:
+            num_decoder_layers = checkpoint["hypers"]["num_decoder_layers"]
+            num_encoder_layers = checkpoint["hypers"]["num_encoder_layers"]
+        max_len = checkpoint["hypers"]["max_len"]
+        dropout = checkpoint["hypers"]["dropout"]
 
-    decoded_x = out.float()
-    left = decoded_x.view(-1, decoded_x.size(-1))
-    right = test_card.reshape(-1).to(device)[1:]
-    print(left.shape, right.shape)
-    recon_loss = nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id('<pad>'))(left, right)
-    print(recon_loss)
+        test_set_portion = checkpoint["hypers"]["test_set_portion"]
+        seed = checkpoint["hypers"]["seed"]
 
-
-    #simulate decoder
-
-    # # Initialize the output sequence with the <sos> token
-    # generated_sequence = torch.full((1, 1), sos_token_id, dtype=torch.long, device=device)
-    # BIG_OUTPUT_LOGIT_LIST = torch.empty((1, max_len, vae_model.decoder.output_dim), device=device)
-
-    # z = z.unsqueeze(1)
-
-    # embedded = vae_model.decoder.embedding(generated_sequence)
-    # embedded = vae_model.decoder.pos_encoder(embedded)
-    # tgt_mask = torch.triu(torch.ones(max_len, max_len, device=device) * float('-inf'), diagonal=1)
-
-    # current_mask = tgt_mask[:0 + 1, :0 + 1]
-    # decoded = vae_model.decoder.transformer_decoder(tgt=embedded, memory=z, tgt_mask=current_mask)
-
-    # output_logits = vae_model.decoder.fc_out(decoded[:, -1, :])
-    # BIG_OUTPUT_LOGIT_LIST[:, 0, :] = output_logits
-    # temperature = 0.8
-    # scaled_output_logits = output_logits / temperature
-    # best_tokens = torch.topk(torch.nn.functional.softmax(scaled_output_logits, dim=-1), 15, dim=-1).indices
-    # print(tokenizer.decode(best_tokens.squeeze().tolist(), skip_special_tokens=False))
+        #Load model into memory and set to eval mode
+        model = TransformerVAE(vocab_size, embed_dim, num_heads, hidden_dim, num_encoder_layers, num_decoder_layers, max_len, dropout=dropout).to(device)
+        model.load_state_dict(checkpoint["model_state"])
+        model.eval()
         
+        for name, test_func, args in return_test_fns:
+            
 
-    
+            result = test_func(model, **args)
 
-    
-    
+            #print(result)
+            results[name].append((model_name, result))
+            
+
+    # Collect all results into a list of rows for the table
 
 
+    for result_name in results:
+        table_data = []
+        print(f"Results for {result_name}")
+        
+        # Prepare table headers dynamically based on dictionary keys
+        headers = ["Model Name"]  # Start with a column for model names
+        first_result = None
+        for model_name, result in results[result_name]:
+            if first_result is None:
+                first_result = result  # Get the first result to extract column names
+            # Add model name to table data
+            row = [model_name] + [result[key] for key in first_result]
+            table_data.append(row)
 
+        # Include keys of the dictionary as headers
+        if first_result is not None:
+            headers += list(first_result.keys())
 
-
-    
+        # Print the table using tabulate
+        print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
+        print("\n")

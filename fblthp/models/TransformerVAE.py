@@ -432,8 +432,8 @@ class TransformerVAE(nn.Module):
     def print_model_size(self, debug=False):
         param_size = 0
         params = 0
-
-        print("\nParameters:")
+        if debug:
+            print("\nParameters:")
         for name, param in self.named_parameters():
             size = param.nelement() * param.element_size()  # number of elements * size of each element
             param_size += size
@@ -445,13 +445,14 @@ class TransformerVAE(nn.Module):
 
         buffer_size = 0
         buffers = 0
-
-        print("\nBuffers:")
+        if debug:
+            print("\nBuffers:")
         for name, buffer in self.named_buffers():
             size = buffer.nelement() * buffer.element_size()  # number of elements * size of each element
             buffer_size += size
             buffers += buffer.nelement()
-            print(f"  Name: {name}, Shape: {buffer.shape}, Memory: {size / (1024 ** 2):.2f} MB")
+            if debug:
+                print(f"  Name: {name}, Shape: {buffer.shape}, Memory: {size / (1024 ** 2):.2f} MB")
 
         total_size = param_size + buffer_size
 

@@ -10,12 +10,15 @@ warnings.filterwarnings(
     category=FutureWarning,
     message=r"You are using `torch.load` with `weights_only=False`"
 )
-from TransformerVAE import TransformerVAE
+
+
+
+from models.TransformerVAE import TransformerVAE
 import torch
 import os
 from tokenizers import Tokenizer
-from torch.utils.data import DataLoader, Dataset, random_split
-from train import MagicCardDataset
+from torch.utils.data import DataLoader, random_split
+from data.datasets import get_dataloaders
 from tabulate import tabulate
 from collections import defaultdict
 from tqdm import tqdm
@@ -28,20 +31,7 @@ import pandas as pd
 import ast
 import math
 
-class LabeledMagicCardDataset(Dataset):
-    def __init__(self, max_len=125, target="corpus.csv"):
-        self.max_len = max_len
-        self.corpus_dataframe = pd.read_csv(target)
-
-    def __len__(self):
-        return len(self.corpus_dataframe)
-
-    def __getitem__(self, idx):
-        row = self.corpus_dataframe.iloc[idx]
-        tolist = row.tolist()
-        return tolist
-
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def eval_test_func(model):
@@ -51,7 +41,7 @@ def eval_test_func(model):
 def recon_loss(model, test_dataloader):
     l_recon = 0.0
     for test_x in test_dataloader:
-        test_x = test_x.to(device)
+        test_x = test_x["ids"].to(device)
         test_logits, test_mu, test_logvar = model(test_x, target_seq=test_x)
         total, recon, scaled, kl = model.vae_loss(test_logits, test_x, test_mu, test_logvar, kl_weight=0.03, free_bits=0.2)
         l_recon += recon.item()
@@ -63,9 +53,21 @@ def attribute_reconstruction_loss(model, test_dataloader, tokenizer, n=32):
         pattern = fr"<{attribute}>(.*?)<\\{attribute}>"
         match = re.search(pattern, text)
         if match:
-            return match.group(1).strip()
-        return None
-
+            return match.group(1).strip().replace("}", "").replace("{", "").replace("*", "0")
+        return "0"
+    def mop(text, make_zero=False):
+        if isinstance(text, str):
+            text = text.replace("}", "").replace("{", "").replace(" ", "").replace("*", "0")
+            if text == "nan":
+                return "0"
+            if make_zero and text == "":
+                return "0"
+            if "+" in text:
+                text = str(eval(text))
+            return text
+        if math.isnan(text):
+            return "0"
+        return text
     model.eval()  # Set model to evaluation mode
 
     intermediates = defaultdict(list)
@@ -75,62 +77,37 @@ def attribute_reconstruction_loss(model, test_dataloader, tokenizer, n=32):
     pbar = tqdm(total=n, desc="Attribute Reconstruction Loss")
     while i < n:
         x = next(iter(test_dataloader))
-        num_examples = x.shape[0]
+        
 
-        x = x.to(device)
-        mu, logvar = model.encoder(x)
+        x_i = x["ids"].to(device)
+        num_examples = x_i.shape[0]
+        mu, logvar = model.encoder(x_i)
         z = model.reparameterize(mu, logvar)
         reconstructed_token_ids = model.generate(z, max_len=125)
-
+        original_texts = x["originals"]
         for example in range(num_examples):
             reconstructed_text = tokenizer.decode(reconstructed_token_ids[example].squeeze().tolist(), skip_special_tokens=False)
-            original_text = tokenizer.decode(x[example].squeeze().tolist(), skip_special_tokens=False)
+            original_text = original_texts[example]
             #Mana cost
 
-            
-            left = yoink(original_text, "mc")
-            if not left:
-                left = "0"
-            else:
-                left = left.replace("}", "").replace("{", "")
-            right = yoink(reconstructed_text, "mc")
-            
-            if not right:
-                right = "0"
-            else:
-                right = right.replace("}", "").replace("{", "")
-            left_cmc = sum([int(x) if x.isdigit() else 1 for x in left.replace(" ", "")])
-            right_cmc = sum([int(x) if x.isdigit() else 1 for x in right.replace(" ", "")])
+            left = mop(x["mc"][example])
+            right = mop(yoink(reconstructed_text, "mc"))
+            left_cmc = sum([int(x) if x.isdigit() else {"X": 0, "Y": 0, "W": 1, "U": 1, "B": 1 , "R": 1, "G": 1, "C": 1, "P": 1, "/": -1, }[x] for x in left])
+            right_cmc = sum([int(x) if x.isdigit() else {"X": 0, "Y": 0, "W": 1, "U": 1, "B": 1 , "R": 1, "G": 1, "C": 1, "P": 1, "/": -1, }[x] for x in right])
 
             intermediates["MC Levenshtein"].append(Levenshtein.ratio(left, right))
             intermediates["CMC MSE"].append((left_cmc - right_cmc)**2)
 
             #Power
 
-            left = yoink(original_text, "power")
-            if not left:
-                left = "0"
-            else:
-                left = left.replace("}", "").replace("{", "").replace("*", "0")
-            right = yoink(reconstructed_text, "power")
-            if not right:
-                right = "0"
-            else:
-                right = right.replace("}", "").replace("{", "").replace("*", "0")
+            left = mop(x["power"][example], make_zero=True)
+            right = mop(yoink(reconstructed_text, "power"), make_zero=True)
             intermediates["Power MSE"].append((int(left) - int(right))**2)
 
             #Toughness
 
-            left = yoink(original_text, "toughness")
-            if not left:
-                left = "0"
-            else:
-                left = left.replace("}", "").replace("{", "").replace("*", "0")
-            right = yoink(reconstructed_text, "toughness")
-            if not right:
-                right = "0"
-            else:
-                right = right.replace("}", "").replace("{", "").replace("*", "0")
+            left = mop(x["toughness"][example], make_zero=True)
+            right = mop(yoink(reconstructed_text, "toughness"), make_zero=True)
             intermediates["Toughness MSE"].append((int(left) - int(right))**2)
 
             i += 1
@@ -174,7 +151,7 @@ def tsne_graphs(model, test_dataloader, tokenizer, n=32):
     i = 0
     while i < n:
         x = next(iter(test_dataloader))
-        x_i = x["ids"]
+        x_i = x["ids"].to(device)
 
         mu, logvar = model.encoder(x_i)
         z = model.reparameterize(mu, logvar)
@@ -219,22 +196,103 @@ def tsne_graphs(model, test_dataloader, tokenizer, n=32):
 
     return {}
 
+# Function to generate and log a card to wandb
+def log_generated_card(model, tokenizer, device='cuda', n=1):
+    model.eval()  # Set model to evaluation mode
+    for i in range(n):
+        # Generate a random latent vector (or sample from the latent space)
+        latent_vector = torch.randn(1, model.encoder.fc_mu.out_features).to(device)
+        
+        # Generate a card from the latent vector
+        generated_token_ids = model.generate(latent_vector, max_len=125)[0]  # Adjust max_len if needed
+
+        if isinstance(generated_token_ids, torch.Tensor):
+            if generated_token_ids.ndim == 0:  # Handle scalar tensor
+                generated_token_ids = [generated_token_ids.item()]
+            else:
+                generated_token_ids = generated_token_ids.squeeze().tolist()
+
+        # Convert token IDs back to human-readable text
+        generated_text = tokenizer.decode(generated_token_ids, skip_special_tokens=False)
+        
+        # Log the generated card text to wandb
+        #wandb.log({"generated_card": generated_text})
+        print("ids[:10]:", generated_token_ids[:10])
+        print("decoded text: ", generated_text.replace('<pad>', '').replace('<eos>', ''))
+
+    model.train()  # Switch back to training mode
+
+def reconstruct_cards(model, tokenizer, dataloader, device='cuda', n=1):
+    model.eval()  # Set model to evaluation mode
+    reconstructed_texts = []
+    original_texts = []
+    
+    with torch.no_grad():
+        for i, x in enumerate(dataloader):
+            if i >= n:
+                break
+            x = x["ids"].to(device)
+            x = x[0, :].unsqueeze(0) # take only the first one
+            mu, logvar = model.encoder(x)
+            z = model.reparameterize(mu, logvar)
+            reconstructed_token_ids = model.generate(z, max_len=x.size(1))
+            reconstructed_text = tokenizer.decode(reconstructed_token_ids.squeeze().tolist(), skip_special_tokens=False)
+            original_text = tokenizer.decode(x.squeeze().tolist(), skip_special_tokens=False)
+            reconstructed_texts.append(reconstructed_text)
+            original_texts.append(original_text)
+    
+    for original, reconstructed in zip(original_texts, reconstructed_texts):
+        print(f"Original: {original.replace('<pad>', '').replace('<eos>', '').replace('<sos>', '').strip()}")  # Remove padding tokens
+        print()
+        print(f"Reconstructed: {reconstructed.replace('<eos>', '').replace('<sos>', '').strip()}")  # Remove padding tokens
+        print("-" * 50)
+    
+    model.train()  # Switch back to training mode
+
+
+def diagnostic_test(model, test_dataloader, tokenizer, hypers, beta):
+    print("-Triggering DIAGNOSTIC LOGGING! -_-")
+    if test_dataloader is None:
+        print("No test data!")
+        return False
+    model.eval()
+    with torch.no_grad():
+        l_total = 0.0
+        l_recon = 0.0
+        l_scaled = 0.0
+        l_kl = 0.0
+        for test_x in test_dataloader:
+            test_x = test_x["ids"].to(device)
+            test_logits, test_mu, test_logvar = model(test_x, target_seq=test_x)
+            total, recon, kl, scaled  = model.vae_loss(test_logits, test_x, test_mu, test_logvar, kl_weight=beta, free_bits=hypers["free_bits"])
+            l_total += total.item()
+            l_recon += recon.item()
+            l_scaled += scaled.item()
+            l_kl += kl.item()
+        l_total /= len(test_dataloader)
+        l_recon /= len(test_dataloader)
+        l_scaled /= len(test_dataloader)
+        l_kl /= len(test_dataloader)
+        # Log the validation loss to wandb
+        metrics = {
+            "val_loss": l_total,
+            "val_ce_loss": l_recon,
+            "val_kl_loss": l_kl,
+            "val_scaled_kl_loss": l_scaled,
+        }
+    model.train()
+    print("----------------[Validation Loss:]-----------------")
+    print(f"Total loss: {l_total:.4f}, CE loss: {l_recon:.4f}, KL loss: {l_kl:.4f}, Scaled KL loss: {l_scaled:.4f}")
+    print("----------[Sample cards:]----------------- ")
+    log_generated_card(model, tokenizer, device, n=10)
+    print("----------[Reconstructed cards:]----------------- ")
+    reconstruct_cards(model, tokenizer, test_dataloader, device, n=10)
+    return metrics
+
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-    MODELS_DIR = "checkpoints"
-    models = {
-        "512d-best": "12-3-best.pt",
-        "512d-overfit": "12-3-overfit.pt",
-        "768d-best": "12-5-best.pt",
-        "768d-overfit": "12-5-overfit.pt",
-        "1024d-best": "12-5-1024dim-best.pt",
-        "1024d-4l-encoder-best": "12-6-4layerencoder-best.pt",
-        }
-
-
-
+    MODELS_DIR = "weights_stash"
 
     tokenizer = Tokenizer.from_file("wordpiece_tokenizer.json")
 
@@ -242,40 +300,24 @@ if __name__ == '__main__':
     test_set_portion = 0.05
     batch_size = 32
 
-    # DataLoader
-    dataset = LabeledMagicCardDataset(max_len=125, target="labeled.csv")
+    _, test_dataloader = get_dataloaders(test_set_portion, seed, batch_size)
 
-    # Get the training dataset
-    train_size = int(len(dataset) * (1 - test_set_portion))
-    test_size = len(dataset) - train_size
-    torch.manual_seed(seed) # Seed so the random split is the same and doesn't contaminate when reloading a model
-    train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
-
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, 
-                                pin_memory=True, num_workers=2, persistent_workers=True)
+    models = {
+        "512d-best": "12-3-best.pt",
+        "512d-overfit": "12-3-overfit.pt",
+        "768d-best": "12-5-best.pt",
+        "768d-overfit": "12-5-overfit.pt",
+        "1024d-best": "12-5-1024dim-best.pt",
+        "1024d-4l-encoder-best": "12-6-4layerencoder-best.pt",
+        "micro-best": "micro-best.pt",
+        "micro-overfit": "micro-overfit.pt"
+        }
     
-    def collate_fn(batch):
-        ids = [ast.literal_eval(x[1]) for x in batch]
-        ids = torch.tensor(ids, device=device)
-        originals = [x[0] for x in batch]
-        mc = [x[2] for x in batch]
-        power = [x[3] for x in batch]
-        toughness = [x[4] for x in batch]
-        cmc = [x[5] for x in batch]
-
-        return {
-            "ids": ids, 
-            "originals": originals,
-            "mc": mc,
-            "power": power,
-            "toughness": toughness,
-            "cmc": cmc,
-            }
     return_test_fns = [
         #("Test Function", eval_test_func, {}),
-        #("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
-        #("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300})
-        ("TSNE Graphs", tsne_graphs, {"test_dataloader": DataLoader(test_dataset, batch_size=32, shuffle=True, collate_fn=collate_fn), "tokenizer": tokenizer, "n": 500})
+        ("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
+        ("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
+        #("TSNE Graphs", tsne_graphs, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 500}),
     ]
 
     results = {name: [] for name, _, _ in return_test_fns}

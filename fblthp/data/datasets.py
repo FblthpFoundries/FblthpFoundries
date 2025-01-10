@@ -89,7 +89,7 @@ class MagicCardDataset(Dataset):
             card = text.strip() + f' {special_tokens["eos"]}'
             corpus = corpus.append({'card': card}, ignore_index=True)
         
-        corpus["tokens"] = corpus["card"].apply(lambda x: tokenizer.encode(x).ids)
+        corpus["tokens"] = corpus["card"].apply(lambda x: tokenizer.encode(x, ).ids)
         corpus["mc"] = corpus["card"].apply(lambda x: yoink(x, "mc"))
         corpus["power"] = corpus["card"].apply(lambda x: yoink(x, "power"))
         corpus["toughness"] = corpus["card"].apply(lambda x: yoink(x, "toughness"))
@@ -105,7 +105,12 @@ class MagicCardDataset(Dataset):
 
 
 def collate_fn(batch):
-        ids = [ast.literal_eval(x[1]) for x in batch]
+        def parse(text):
+            parsed_list = ast.literal_eval(text)
+            if parsed_list[0] != 1:
+                parsed_list = [1] + parsed_list[:-1]
+            return parsed_list
+        ids = [parse(x[1]) for x in batch]
         ids = torch.tensor(ids)
         originals = [x[0] for x in batch]
         mc = [x[2] for x in batch]
@@ -121,6 +126,7 @@ def collate_fn(batch):
             "toughness": toughness,
             "cmc": cmc,
             }
+
 def get_dataloaders(test_set_portion, seed, batch_size):
     # DataLoader
     dataset = MagicCardDataset(target="data/labeled.csv")

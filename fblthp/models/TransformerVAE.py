@@ -507,8 +507,7 @@ class TransformerVAE(nn.Module):
             if (next_token == eos_token).all():
                 break
 
-        # Remove the initial <sos> token
-        return generated_sequence[:, 1:]
+        return generated_sequence[:, :]
 
     
     def vae_loss(self, decoded_x, x, mu, logvar, kl_weight=1.0, free_bits=0.1, pad_token_idx=0):

@@ -221,6 +221,7 @@ def log_generated_card(model, tokenizer, device='cuda', n=1):
         print("decoded text: ", generated_text.replace('<pad>', '').replace('<eos>', ''))
 
     model.train()  # Switch back to training mode
+    return {}
 
 def reconstruct_cards(model, tokenizer, dataloader, device='cuda', n=1):
     model.eval()  # Set model to evaluation mode
@@ -303,21 +304,25 @@ if __name__ == '__main__':
     _, test_dataloader = get_dataloaders(test_set_portion, seed, batch_size)
 
     models = {
-        "512d-best": "12-3-best.pt",
-        "512d-overfit": "12-3-overfit.pt",
-        "768d-best": "12-5-best.pt",
-        "768d-overfit": "12-5-overfit.pt",
-        "1024d-best": "12-5-1024dim-best.pt",
-        "1024d-4l-encoder-best": "12-6-4layerencoder-best.pt",
-        "micro-best": "micro-best.pt",
-        "micro-overfit": "micro-overfit.pt"
+        #"512d-best": "12-3-best.pt",
+        #"512d-overfit": "12-3-overfit.pt",
+        #"768d-best": "12-5-best.pt",
+        #"768d-overfit": "12-5-overfit.pt",
+        #"1024d-best": "12-5-1024dim-best.pt",
+        #"1024d-4l-encoder-best": "12-6-4layerencoder-best.pt",
+        #"micro-best": "micro-best.pt",
+        #"micro-overfit": "micro-overfit.pt",
+        "adamant-will": "adamant-will_best_checkpoint.pt",
+        "big-dropout": "big-dropout.pt",
         }
     
     return_test_fns = [
         #("Test Function", eval_test_func, {}),
-        ("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
-        ("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
+        #("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
+        #("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
         #("TSNE Graphs", tsne_graphs, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 500}),
+        #("Diagnostic Test", diagnostic_test, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "hypers": {"free_bits": 0.2}, "beta": 0.01}),
+        ("Log Cards", log_generated_card, {"tokenizer": tokenizer, "n": 1}),
     ]
 
     results = {name: [] for name, _, _ in return_test_fns}

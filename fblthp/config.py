@@ -1,13 +1,13 @@
 HYPERS = {
     "model": "TransformerVAE",
-    "embed_dim": 128,
-    "num_heads": 8,
-    "hidden_dim": 512,
-    "num_encoder_layers": 2,
-    "num_decoder_layers": 4,
+    "embed_dim": 256,
+    "num_heads": 16,
+    "hidden_dim": 1024,
+    "num_encoder_layers": 4,
+    "num_decoder_layers": 8,
     "max_len": 125,
-    "batch_size": 32,
-    "accumulation_steps": 2,
+    "batch_size": 64,
+    "accumulation_steps": 1,
     "dropout": 0.25,
     "num_steps": 500000,
     "learning_rate": 0.00001,
@@ -20,5 +20,5 @@ HYPERS = {
     "vocab_size": 20000,
     "test_set_portion": 0.05,
     "seed": 42,
-    "name": "adamant-will"
+    "name": "karn-the-great-creator"
 }

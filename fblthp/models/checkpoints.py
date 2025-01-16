@@ -1,6 +1,7 @@
 import torch
 import os
 from .TransformerVAE import TransformerVAE
+from .ADVAE import ADVAE
 from transformers import get_linear_schedule_with_warmup
 import torch.optim as optim
 import uuid
@@ -80,6 +81,19 @@ def create_gods(hypers, filename=None):
         model = TransformerVAE(
             vocab_size=hypers["vocab_size"],
             embed_dim=hypers["embed_dim"],
+            num_heads=hypers["num_heads"],
+            hidden_dim=hypers["hidden_dim"],
+            num_encoder_layers=hypers["num_encoder_layers"],
+            num_decoder_layers=hypers["num_decoder_layers"],
+            max_len=hypers["max_len"],
+            dropout=hypers["dropout"],
+        ).to(device)
+        hypers["id"] = str(uuid.uuid4())
+    elif hypers["model"] == "ADVAE":
+        model = ADVAE(
+            vocab_size=hypers["vocab_size"],
+            embed_dim=hypers["embed_dim"],
+            latent_dim=hypers["latent_dim"],
             num_heads=hypers["num_heads"],
             hidden_dim=hypers["hidden_dim"],
             num_encoder_layers=hypers["num_encoder_layers"],

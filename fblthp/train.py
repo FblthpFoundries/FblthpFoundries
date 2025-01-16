@@ -21,7 +21,7 @@ import torch
 from models.checkpoints import save_state, create_gods
 from models.loss import compute_beta
 from data.datasets import get_dataloaders
-from data.tokenizers import get_mtg_tokenizer
+from data.tokenizers_help import get_mtg_tokenizer
 from test import diagnostic_test
 from utils.logs import init_wandb, log_memory, log_batch, log_eval
 import wandb
@@ -143,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(description="Train a VAE model (TransformerVAE or BertVAE).")
     parser.add_argument("--model", type=str, choices=["TransformerVAE", "BertVAE"], default="TransformerVAE",
                         help="Choose which VAE model to train.")
-    parser.add_argument("--resume_weights", type=str, default=None,)
+    parser.add_argument("--resume-weights", type=str, default=None,)
     args = parser.parse_args()
 
     # Initialize or load tokenizer

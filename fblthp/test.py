@@ -58,7 +58,7 @@ def attribute_reconstruction_loss(model, test_dataloader, tokenizer, n=32):
     def mop(text, make_zero=False):
         if isinstance(text, str):
             text = text.replace("}", "").replace("{", "").replace(" ", "").replace("*", "0")
-            if text == "nan":
+            if text == "nan" or text == "<empty>":
                 return "0"
             if make_zero and text == "":
                 return "0"
@@ -149,8 +149,9 @@ def tsne_graphs(model, test_dataloader, tokenizer, n=32):
     colors = []
     cmcs = []
     i = 0
+    it = iter(test_dataloader)
     while i < n:
-        x = next(iter(test_dataloader))
+        x = next(it)
         x_i = x["ids"].to(device)
 
         mu, logvar = model.encoder(x_i)
@@ -205,6 +206,7 @@ def log_generated_card(model, tokenizer, device='cuda', n=1):
         
         # Generate a card from the latent vector
         generated_token_ids = model.generate(latent_vector, max_len=125)[0]  # Adjust max_len if needed
+        #print(generated_token_ids)
 
         if isinstance(generated_token_ids, torch.Tensor):
             if generated_token_ids.ndim == 0:  # Handle scalar tensor
@@ -312,16 +314,18 @@ if __name__ == '__main__':
         #"1024d-4l-encoder-best": "12-6-4layerencoder-best.pt",
         #"micro-best": "micro-best.pt",
         #"micro-overfit": "micro-overfit.pt",
-        "adamant-will": "adamant-will_best_checkpoint.pt",
-        "big-dropout": "big-dropout.pt",
+        #"adamant-will": "adamant-will_best_checkpoint.pt",
+        #"big-dropout": "big-dropout.pt",
+        "ugins-conjurant": "ugins-conjurant_best_checkpoint.pt",
+        "battlefield-promotion":"battlefield-promotion_best_checkpoint.pt"
         }
     
     return_test_fns = [
-        #("Test Function", eval_test_func, {}),
-        #("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
-        #("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
-        #("TSNE Graphs", tsne_graphs, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 500}),
-        #("Diagnostic Test", diagnostic_test, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "hypers": {"free_bits": 0.2}, "beta": 0.01}),
+        ("Test Function", eval_test_func, {}),
+        ("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
+        ("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
+        ("TSNE Graphs", tsne_graphs, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 500}),
+        ("Diagnostic Test", diagnostic_test, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "hypers": {"free_bits": 0.2}, "beta": 0.01}),
         ("Log Cards", log_generated_card, {"tokenizer": tokenizer, "n": 1}),
     ]
 

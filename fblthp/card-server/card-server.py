@@ -1,17 +1,25 @@
 from flask import Flask, request, jsonify
-import htmlRender, cardFactory
-import json
+import htmlRender, cardFactory, cardGenerator, artFactory
+import json, logging
 
 
 def create_app():
     app = Flask(__name__)
-    factory = cardFactory.Factory()
+    logging.basicConfig(filename='log.log',
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        filemode='a',
+                        level=logging.INFO)
+    logger = logging.getLogger()
+    logger.info('Start')
+    cardGen = cardGenerator.GPT2Gen(logger)
+    artGen = artFactory.ArtGen(logger)
+    factory = cardFactory.Factory(cardGen, artGen, logger)
 
     @app.route('/')
     def hello():
         return 'sup bitches'
     
-
+    """
     @app.route('/make_card', methods = ['POST'])
     def makeCard():
 
@@ -42,6 +50,7 @@ def create_app():
             factory.consume()
 
         return jsonify({'cards':'card'})
+    """
     
 
     @app.route('/test', methods = ['GET'])

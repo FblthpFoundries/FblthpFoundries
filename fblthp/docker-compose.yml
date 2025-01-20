@@ -1,8 +1,7 @@
 services:
     card-server:
-        image: fblthp-server
-        build: card-server/
-        command: sh -c "rm /server/images/*.png && python -m flask run -p 5001 -h 0.0.0.0 "
+        image: card-server 
+        command: sh -c "python -m flask run -p 5001 -h 0.0.0.0"
         ports:
             - 5001:5001
 
@@ -14,8 +13,6 @@ services:
             - FLASK_ENV=development
 
         volumes:
-            - card-storage:/root/.cache
-            - pip-installs:/usr/local/lib/python3.12/site-packages
             - ./card-server:/server/
 
         deploy:
@@ -26,9 +23,12 @@ services:
                             count: 1
                             capabilities: [gpu]
 
+
+    mse-factory:
+        
+
     discord-bot:
         image: fblthp-discord-bot
-        build: discord-app/
         command: sh -c "npm run register && npm run start"
         ports:
             - 5000:5000

@@ -7,3 +7,6 @@
 [submodule "fblthp/Basic-M15-Magic-Pack"]
 	path = fblthp/Basic-M15-Magic-Pack
 	url = https://github.com/FblthpFoundries/Basic-M15-Magic-Pack
+[submodule "fblthp/MagicSetEditor2"]
+	path = fblthp/MagicSetEditor2
+	url = https://github.com/twanvl/MagicSetEditor2

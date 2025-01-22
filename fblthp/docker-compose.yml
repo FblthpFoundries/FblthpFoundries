@@ -25,10 +25,12 @@ services:
 
 
     mse-factory:
+        image: mse2
+
         
 
     discord-bot:
-        image: fblthp-discord-bot
+        image: discord-app
         command: sh -c "npm run register && npm run start"
         ports:
             - 5000:5000

@@ -1,6 +1,7 @@
+from multiprocessing import Process
 from flask import Flask, request, jsonify
-import htmlRender, cardFactory, cardGenerator, artFactory
-import json, logging
+import  cardFactory, cardGenerator, artFactory
+import json, logging, sys
 
 
 def create_app():
@@ -60,4 +61,23 @@ def create_app():
     return app
 
 if __name__ == '__main__':
-    create_app.run( debug = True)
+    app = create_app()
+    server = Process(app.run(host='0.0.0.0', port = 5001, debug = True))
+    server.start()
+
+    print('press escape to close')
+
+    while True:
+        ch = sys.stdin.read(1)
+        if ch == '\x1b':
+            print('exit? [Y/N]')
+            ch = sys.stdin.read(1)
+            if ch == 'y' or ch == 'Y':
+                break
+
+
+    server.terminate()
+    server.join()
+    print('goodbye')
+
+    

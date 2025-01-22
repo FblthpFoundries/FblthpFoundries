@@ -6,6 +6,4 @@ Requests>=2.32.3
 tokenizers>=0.19.0
 torch>=2.2.2
 transformers>=4.39.3
-imgkit>=1.2.3
-beautifulsoup4>=4.9.3
 replicate

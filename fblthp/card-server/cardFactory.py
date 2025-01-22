@@ -22,6 +22,8 @@ class Factory():
 
         cards = self.cardGen.generate()
 
+        self.artGen.getArt(cards)
+
         images = self.artGen.renderBatch(cards)
 
         for card in images:

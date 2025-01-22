@@ -21,3 +21,7 @@ fblthp/wandb/*
 fblthp/output.txt
 *.pt
 fblthp/tokenizer/*
+fblthp/card-server/images/**/*.png
+.*~
+.un~
+.swp

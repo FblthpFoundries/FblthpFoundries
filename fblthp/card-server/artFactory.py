@@ -12,28 +12,35 @@ FBLTHP_OUT = BASE_DIR / "images" / "rendered"
 class ArtGen:
     def __init__(self, logger: logging.Logger ):
         self.logger = logger
-        if not os.path.exists(FBLTHP_OUT):
-            os.makedirs(FBLTHP_OUT)
+        if os.path.exists(FBLTHP_OUT):
+            for root, dirs, files in os.walk(FBLTHP_OUT, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+            os.rmdir(FBLTHP_OUT)
+        os.makedirs(FBLTHP_OUT)
+
 
     def getArt(self, batch: list[Card]):
         pass
 
     def renderBatch(self, batch: list[Card]) -> list[str]:
-        MSE_PATH = BASE_DIR / 'Basic-M15-Magic-Pack'
+        MSE_PATH = BASE_DIR.parent / 'Basic-M15-Magic-Pack'
         # Create the ZIP file path
         zipPath = createMSE(batch, 'tmp', self.logger)
 
         # Define the rendering script
-        renderScript = f'for each c in set.cards do write_image_file(c, file: c.name + ".png")'
+        renderScript = 'for each c in set.cards do write_image_file(c, file: c.name + ".png")'
 
-        # Open the MSE process directly, passing the render script via stdin
-        try:
-            renderProcess = subprocess.Popen([MSE_PATH / 'mse', '--cli', zipPath],
+        # Open the MSE process directly, passing the render script via stdina
+
+        with  subprocess.Popen([MSE_PATH / 'mse', '--cli', zipPath],
                                             stdin=subprocess.PIPE,
                                             stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE,
-                                            text=True)
-
+                                            text=True) as renderProcess:
+              
             # Send the script content to the stdin of the MSE process
             output, error = renderProcess.communicate(input=renderScript)
 
@@ -42,8 +49,6 @@ class ArtGen:
             else:
                 print(f"Rendering completed. Output: {output}")
 
-        except FileNotFoundError:
-            print(f"File not found. Ensure MSE_PATH is correct: {MSE_PATH / 'mse'}")
 
         for card in batch:
             fileName = card.name[1:] if card.name[0] == ' ' else card.name
@@ -54,3 +59,5 @@ class ArtGen:
         for file in os.listdir(BASE_DIR):
             if file.endswith('.png'):
                 os.remove(file)
+
+        return [card.render_path for card in batch]

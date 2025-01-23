@@ -1,7 +1,7 @@
 from multiprocessing import Process
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import  cardFactory, cardGenerator, artFactory
-import json, logging, sys
+import json, logging, sys, os, base64
 
 
 def create_app():
@@ -16,47 +16,20 @@ def create_app():
     artGen = artFactory.ArtGen(logger)
     factory = cardFactory.Factory(cardGen, artGen, logger)
 
+    def getCard():
+        img = factory.consume()
+        encoded = base64.b64encode(open(img, 'rb').read()).decode('utf-8')
+        os.remove(img)
+        return f'data:image/png;base64,{encoded}'
+
     @app.route('/')
     def hello():
         return 'sup bitches'
     
-    """
-    @app.route('/make_card', methods = ['POST'])
-    def makeCard():
-
-        args = request.get_json()
-
-        if not 'text' in args:
-            return 'fuck you bitch', 400
-
-        text = None if args['text'] == '' else args['text'].replace('/', '\\')
-
-        card, art = factory.consume(text)
-        
-        card = htmlRender.renderCard(card, art)
-
-        return jsonify({'card':card})
-    
-
-    @app.route('/make_many_cards', methods = ['POST'])
-    def makeManyCards():
-        args = request.get_json()
-
-        if not 'num' in args:
-            return 'fuck you bitch', 400
-        
-        num = args['num']
-
-        for i in range(num):
-            factory.consume()
-
-        return jsonify({'cards':'card'})
-    """
-    
-
     @app.route('/test', methods = ['GET'])
     def test():
-        return jsonify({'card':factory.consume()[0]})
+        img = getCard()
+        return  render_template('simple.html', image = img)
     
     return app
 

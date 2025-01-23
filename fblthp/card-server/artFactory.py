@@ -1,5 +1,3 @@
-import requests, urllib
-from datetime import datetime
 from card import Card
 from genMSE import createMSE
 import  os, subprocess
@@ -35,26 +33,22 @@ class ArtGen:
 
         # Open the MSE process directly, passing the render script via stdina
 
-        with  subprocess.Popen([MSE_PATH / 'mse', '--cli', zipPath],
-                                            stdin=subprocess.PIPE,
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE,
-                                            text=True) as renderProcess:
+        with subprocess.Popen([MSE_PATH / 'mse', '--cli', zipPath],
+                              stdin=subprocess.PIPE,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL,
+                              text=True) as renderProcess:
               
             # Send the script content to the stdin of the MSE process
-            output, error = renderProcess.communicate(input=renderScript)
+            renderProcess.communicate(input=renderScript)
 
-            if error:
-                print(f"Error during rendering: {error}")
-            else:
-                print(f"Rendering completed. Output: {output}")
-
-
+        # Rename the files to include the UUID and move to the output directory
         for card in batch:
             fileName = card.name[1:] if card.name[0] == ' ' else card.name
             os.rename(BASE_DIR/f'{fileName}.png', FBLTHP_OUT/f'{fileName + str(card.uuid)}.png')
             card.render_path = FBLTHP_OUT/f'{fileName + str(card.uuid)}.png'
 
+        # Clean up the temporary files
         os.remove(BASE_DIR/'tmp.mse-set')
         for file in os.listdir(BASE_DIR):
             if file.endswith('.png'):

@@ -1,0 +1,71 @@
+.dropdown{
+    position: relative;
+}
+
+.dropdownButton{
+    border-radius: 10px;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    padding-left:1.5rem;
+    padding-right:1.5rem;
+    font-weight: bold;
+    color:white;
+    background-color: grey;
+    display: flex;
+    align-items: center;
+}
+
+.content{
+    position:absolute;
+    z-index: 20;
+    border-radius: 10px;
+    border: 2px;
+    border-color: grey;
+    background-color: white;
+    overflow: hidden;
+    margin-top: .25rem;
+    margin-bottom: .25rem;
+    overflow-y: auto;
+}
+
+.list{
+    border-color:grey;
+    color: grey;
+}
+
+.list > :not(:last-child){
+    border-top-width: 0px;
+    border-bottom-width: 1px;
+}
+
+.item{
+    padding-top: 1rem;
+    padding-bottom:1rem;
+    padding-left:3rem;
+    padding-right:3rem;
+    white-space: nowrap;
+}
+
+.item:hover{
+    text-decoration: underline;
+}
+
+.shadow-md{
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.hidden{
+    display: none;
+}
+
+.menuIcon{
+    margin-left: 0.5rem;
+}
+
+.rotate-180{
+    transform:rotate(180deg);
+}
+
+.rotate-0{
+    transform: rotate(0deg);
+}

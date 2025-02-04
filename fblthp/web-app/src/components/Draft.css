@@ -1,0 +1,12 @@
+.welcome{
+    display:flex;
+    padding:10px 10px 10px 10px;
+    justify-content: space-evenly;
+}
+
+.welcome > button{
+    margin: 20px;
+    margin-top: 50px;
+    font-size: 30px;
+    padding: 10px;
+}

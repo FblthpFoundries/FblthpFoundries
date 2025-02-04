@@ -15,10 +15,26 @@ const DropdownContext = React.createContext({
 
 function Dropdown({children, ...props}) {
     const [open, setOpen] = React.useState(false)
+    const dropdownRef = React.useRef(null)
+
+    React.useEffect(()=>{
+        function close(e){
+            if(!dropdownRef.current.contains(e.target))
+                setOpen(false)
+        }
+
+        if(open){
+            window.addEventListener('click', close)
+        }
+
+        return function removeListener(){
+            window.removeEventListener('click', close)
+        }
+    }, [open])
 
     return(
         <DropdownContext.Provider value ={{open, setOpen}}>
-            <div className="dropdown">{children}</div>
+            <div ref={dropdownRef} className="dropdown">{children}</div>
         </DropdownContext.Provider>
     )
 

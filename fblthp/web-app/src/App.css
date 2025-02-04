@@ -1,0 +1,19 @@
+.nav{
+    padding:5px 0px 5px 5px;
+    background-color: steelblue;
+    display:flex;
+    font-size:20px;
+
+}
+
+.navItem{
+    margin-left: 30px;
+    margin-right: 30px;
+    margin-top: 10px;
+    margin-top: 10px;
+    text-decoration: none;
+}
+
+.banner{
+    text-align: center;
+}

@@ -12,7 +12,7 @@
     color:white;
     background-color: grey;
     display: flex;
-    align-items: center;
+    align-items:center;
 }
 
 .content{
@@ -31,9 +31,10 @@
 .list{
     border-color:grey;
     color: grey;
+    list-style-type: none;
 }
 
-.list > :not(:last-child){
+.list > :not:last-child{
     border-top-width: 0px;
     border-bottom-width: 1px;
 }
@@ -44,6 +45,7 @@
     padding-left:3rem;
     padding-right:3rem;
     white-space: nowrap;
+    text-decoration: none;
 }
 
 .item:hover{

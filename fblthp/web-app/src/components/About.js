@@ -1,6 +1,6 @@
 import React from 'react'
 
-function Test(){
+function About(){
     return(
         <>
             <p>Test</p>
@@ -8,4 +8,4 @@ function Test(){
     )
 }
 
-export default Test
+export default About

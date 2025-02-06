@@ -3,10 +3,12 @@ import Dropdown from './components/dropDown';
 import Home from './components/Home';
 import About from './components/About'
 import { BrowserRouter, Route, Routes, Link } from 'react-router-dom';
+import React from 'react'
 import Draft from './components/Draft';
 
 function App() {
   return (
+    <React.StrictMode>
     <div className="app">
       <div className='banner'>
         <h1>WELCOME HONORED GUEST</h1>
@@ -48,7 +50,7 @@ function App() {
         </Routes>
       </BrowserRouter>
       
-    </div>
+    </div></React.StrictMode>
   );
 }
 

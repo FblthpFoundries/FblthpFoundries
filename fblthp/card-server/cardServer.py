@@ -1,20 +1,36 @@
 from multiprocessing import Process
 from flask import Flask, request, jsonify, render_template
+from flask_socketio import SocketIO, send, emit 
 import  cardFactory, cardGenerator, artFactory
 import json, logging, sys, os, base64
+from draftManager import DraftManager
+
+
+socketio = SocketIO(logger = True, engineio_logger = True)
+
 
 
 def create_app():
     app = Flask(__name__)
+    app.config['SECRET_KEY'] = 'Fblthp\'s Balls'
     logging.basicConfig(filename='log.log',
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         filemode='a',
                         level=logging.INFO)
     logger = logging.getLogger()
     logger.info('Start')
+
+
+    socketio.init_app(app, cors_allowed_origins="*")
+    draftManager = DraftManager(
+        startRoom = lambda player: socketio.emit('roomStarted', room = player),
+        servePack = lambda player, pack :socketio.emit('pack', pack, room = player)
+        )
+    '''
     cardGen = cardGenerator.GPT2Gen(logger)
     artGen = artFactory.ArtGen(logger)
     factory = cardFactory.Factory(cardGen, artGen, logger)
+
 
     def getCard():
         img = factory.consume()
@@ -30,12 +46,31 @@ def create_app():
     def test():
         img = getCard()
         return  render_template('simple.html', image = img)
+
+    '''
+
+    @app.route('/pack')
+    def testPack():
+        draftManager.pack()
+        return 'pack'
     
+    @socketio.on('connect')
+    def connect():
+        draftManager.on_connect(request.sid)
+
+    @socketio.on('disconnect')  
+    def disconnect():
+        draftManager.on_disconnect(request.sid)
+    
+ 
+
     return app
 
 if __name__ == '__main__':
     app = create_app()
-    server = Process(app.run(host='0.0.0.0', port = 5001, debug = True))
+    socketio.run(app, host='0.0.0.0', port = 5001, debug = True)
+    """
+    server = Process()
     server.start()
 
     print('press escape to close')
@@ -52,5 +87,7 @@ if __name__ == '__main__':
     server.terminate()
     server.join()
     print('goodbye')
+
+    """
 
     

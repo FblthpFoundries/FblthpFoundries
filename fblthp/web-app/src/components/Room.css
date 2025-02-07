@@ -1,0 +1,19 @@
+.cardGrid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-gap: 1rem;
+    padding: 1rem;
+}
+
+.card{
+    border: 3px, solid, white;
+}
+
+.card :hover{
+    border: 3px, solid, blue;
+}
+
+.button{
+    border:none;
+    background-color: inherit;
+}

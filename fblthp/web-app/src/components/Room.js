@@ -1,8 +1,7 @@
 import React from "react"
 import {io} from "socket.io-client"
 import constants from "../constants"
-import { data } from "react-router-dom"
-
+import './Room.css'
 
 /*
 * 1) connect to server with socket, at this point client is in room but room may not be started
@@ -13,18 +12,36 @@ const socket = io(constants['cardServer'], {autoConnect: false})
 var connected = false
 var roomStarted = false
 
+function PackGrid({ pack, onPick }) {
+    function pick(id) {
+        socket.emit('pick', id)
+        onPick()  
+    }
 
-function PackGrid(pack){
-
-    return(<p>pack</p>)
+    return (
+        <div className="cardGrid">
+            {pack.map((card) => {
+                return (
+                    <div className="card" key={card['id']}>
+                        <button className="button" onClick={() => pick(card['id'])}>{card['name']}</button>
+                    </div>
+                )
+            })}
+        </div>
+    )
 }
 
-function DraftRoom(){
-    const [roomState, setRoomState]= React.useState(roomStarted)
+function DraftRoom() {
+    const [roomState, setRoomState] = React.useState(roomStarted)
     const [hasPack, setHasPack] = React.useState(false)
-    const pack = React.useRef(null)
+    const [pack, setPack] = React.useState([])
 
-    function updateRoom(state){
+    function pickedCard() {
+        setHasPack(false)
+        setPack([])
+    }
+
+    function updateRoom(state) {
         roomStarted = state
         setRoomState(state)
     }
@@ -35,40 +52,37 @@ function DraftRoom(){
         })
 
         socket.on('pack', (data) => {
-            pack.current = data
-            setHasPack(true)    
+            setPack(data['pack'])
+            setHasPack(true)
         })
     }, [])
 
-    const displayPack = hasPack ? <PackGrid pack/>: <p>waiting for pack</p>
+    const displayPack = hasPack ? <PackGrid pack={pack} onPick={pickedCard} /> : <p>waiting for pack</p>
 
-    return(<>
+    return (<>
         {roomState ? displayPack : <p>Waiting for room to start</p>}
     </>)
 }
 
-function Room(){
-
+function Room() {
     const [connectHook, setConnectHook] = React.useState(connected)
 
-
-    function updateConnect(state){
+    function updateConnect(state) {
         connected = state
         setConnectHook(state)
     }
 
     React.useEffect(() => {
-        if(!connected){
+        if (!connected) {
             socket.connect()
             updateConnect(true)
         }
     }, [])
 
-
-    return(
+    return (
         <>
             Testing Room
-            {connectHook ? <DraftRoom/> : <p>Not Connected</p>}
+            {connectHook ? <DraftRoom /> : <p>Not Connected</p>}
         </>
     )
 }

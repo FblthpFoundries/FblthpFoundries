@@ -51,7 +51,7 @@ def create_app():
 
     @app.route('/pack')
     def testPack():
-        draftManager.pack()
+        draftManager.onPack()
         return 'pack'
     
     @socketio.on('connect')

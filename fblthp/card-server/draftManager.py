@@ -1,24 +1,24 @@
+from Pack import getSet, Pack
 class DraftManager():
 
-    class Pack():
-        class Card():
-            def __init__(self, num):
-                self.id = num
-                self.name = f'card{num}'
-
-            def toJson(self):
-                return {'id':self.id, 'name':self.name}
+    class Room():
         def __init__(self):
-            self.cards = [self.Card(i) for i in range(15)]
+            self.players = []
+            self.passRight = True
 
-        def toJson(self):
-            return {'pack':[card.toJson() for card in self.cards]}
+    class Player():
+        def __init__(self):
+            self.packQueue = []
+
+
 
 
     def __init__(self,startRoom,servePack):
         self.players = {}
         self.startRoom = startRoom
         self.servePack = servePack
+        self.pack = Pack(getSet())
+
 
     def on_connect(self, player):
         print('connect')
@@ -29,9 +29,9 @@ class DraftManager():
         print(f'{player} disconnected')
         del self.players[player]
 
-    def pack(self, ):
+    def onPack(self ):
         for player in self.players:
-            self.servePack(player, self.Pack().toJson())
+            self.servePack(player, self.pack.toJson())
 
     def on_pick(self, player, card):
         self.players[player].append(card)

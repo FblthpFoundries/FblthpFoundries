@@ -61,6 +61,10 @@ def create_app():
     @socketio.on('disconnect')  
     def disconnect():
         draftManager.on_disconnect(request.sid)
+
+    @socketio.on('pick')
+    def onPick(card):
+        draftManager.on_pick(request.sid, card)
     
  
 

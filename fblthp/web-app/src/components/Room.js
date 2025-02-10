@@ -14,8 +14,8 @@ var roomStarted = false
 
 function PackGrid({ pack, onPick }) {
     function pick(id) {
-        socket.emit('pick', id)
         onPick()  
+        socket.emit('pick', id)
     }
 
     return (
@@ -23,7 +23,7 @@ function PackGrid({ pack, onPick }) {
             {pack.map((card) => {
                 return (
                     <div className="card" key={card['id']}>
-                        <button className="button" onClick={() => pick(card['id'])}>{card['name']}</button>
+                        <button className="button" onClick={() => {pick(card['id'])}}>{card['name']}</button>
                     </div>
                 )
             })}

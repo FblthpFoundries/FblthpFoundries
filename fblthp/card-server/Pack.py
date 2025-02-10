@@ -45,6 +45,14 @@ class Pack():
         self.cards.extend([self.Card(x) for _,x in foils.iterrows()])
         self.cards.append(self.Card(land.iloc[0]))
 
+    def pick(self, idx):
+        card = self.cards[idx]
+        del self.cards[idx]
+        return card
+    
+    def len(self):
+        return len(self.cards)
+
 
 
 

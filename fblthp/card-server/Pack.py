@@ -4,7 +4,16 @@ import pandas as pd
 import random
 
 def getSet(set='mh3'):
-    return pd.DataFrame(loads(get(f'https://api.scryfall.com/cards/search?q=s={set}%20g:paper').text)['data'])
+    setURI = loads(get(f'https://api.scryfall.com/sets/{set}').text)['search_uri']
+    page = loads(get(setURI).text)
+    set = pd.DataFrame(page['data'])
+    while page['has_more'] == True:
+        page = loads(get(page['next_page']).text)
+        cards = pd.DataFrame(page['data'])
+        set = pd.concat([set, cards ], axis=0, ignore_index=True)
+
+
+    return set 
 
 class Pack():
     """
@@ -23,11 +32,16 @@ class Pack():
             if '//' in self.name:
                 #pick first face for double sided cards
                 self.img = frame['card_faces'][0]['image_uris']['normal']
+                self.doubleFaced = True
+                self.back = frame['card_faces'][1]['image_uris']['normal']
             else:
                 self.img = frame['image_uris']['normal']
+                self.doubleFaced = False
+                self.back = None
 
         def toJson(self, num):
-            return {'id':num, 'name':self.name, 'img':self.img}
+            return {'id':num, 'name':self.name, 'img':self.img,
+                     'doubleFaced':self.doubleFaced, 'back':self.back}
 
     def __init__(self, set: pd.DataFrame):
         #1-6
@@ -42,7 +56,6 @@ class Pack():
         #11 & 14
         foils = set.sample(n=2)
         #13 Do basics good
-        print(set.loc[set['type_line'].str.contains('Basic')]['name']) 
         land = set.loc[set['type_line'].str.contains('Basic')].sample(n=1)
 
         self.cards = [self.Card(x) for _,x in commons.iterrows()]

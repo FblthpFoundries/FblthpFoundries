@@ -85,7 +85,6 @@ class DraftManager():
         self.players = {}
         self.startRoom = startRoom
         self.servePack = servePack
-        self.pack = Pack(getSet())
 
 
     def on_connect(self, player):

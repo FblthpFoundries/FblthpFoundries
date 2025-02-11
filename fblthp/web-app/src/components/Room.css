@@ -1,26 +1,18 @@
 .cardGrid{
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    grid-template-rows: repeat(3, 5vw);
-    grid-gap: 1rem;
+    grid-template-rows: repeat(3, 1fr);
+    grid-gap: .5rem;
     padding: 1rem;
 }
 
 .card{
-    border: 3px, solid, white;
-}
+    width: 75%;
+    height:auto;
+    transform:scale(1, 1);
+    transition: .1s;
 
-.card :hover{
-    border: 3px, solid, blue;
-}
-
-.button{
-    border:none;
-    background-color: inherit;
-}
-
-.cardImg{
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    &:hover {
+        transform:scale(1.1, 1.1);
+    }
 }

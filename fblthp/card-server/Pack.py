@@ -4,7 +4,7 @@ import pandas as pd
 import random
 
 def getSet(set='mh3'):
-    return pd.DataFrame(loads(get(f'https://api.scryfall.com/cards/search?q=s={set}').text)['data'])
+    return pd.DataFrame(loads(get(f'https://api.scryfall.com/cards/search?q=s={set}%20g:paper').text)['data'])
 
 class Pack():
     """
@@ -20,27 +20,34 @@ class Pack():
     class Card():
         def __init__(self, frame):
             self.name = frame['name']
-            print(self.name)
+            if '//' in self.name:
+                #pick first face for double sided cards
+                self.img = frame['card_faces'][0]['image_uris']['normal']
+            else:
+                self.img = frame['image_uris']['normal']
 
         def toJson(self, num):
-            return {'id':num, 'name':self.name}
+            return {'id':num, 'name':self.name, 'img':self.img}
 
     def __init__(self, set: pd.DataFrame):
-        print(set.loc[set['name'] == 'Island']['name'] == 'Island')
         #1-6
-        commons = set.loc[set['rarity'] == 'common'].sample(6)
+        commons = set.loc[set['rarity'] == 'common'].loc[~set['type_line'].str.contains('Basic')].sample(n=6)
         #7
-        bonus = pd.concat([set.loc[set['rarity'] == 'common'], set.loc[set['rarity'] == 'bonus']]).sample(1)
+        bonus = pd.concat([set.loc[set['rarity'] == 'common'], set.loc[set['rarity'] == 'bonus']]).sample(n=1)
+        #8-10
+        uncommons = set.loc[set['rarity'] == 'uncommon'].sample(n=3)
         #12
         rarity = 'mythic' if random.randint(1,8) == 1 else 'rare'
-        rare = set.loc[set['rarity'] == rarity].sample(1) 
+        rare = set.loc[set['rarity'] == rarity].sample(n=1) 
         #11 & 14
-        foils = set.sample(2)
-        #13 add basics to this somehow
-        land = set.loc[set['type_line'] == 'Land'].loc[set['rarity'] == 'common'].sample(1)
+        foils = set.sample(n=2)
+        #13 Do basics good
+        print(set.loc[set['type_line'].str.contains('Basic')]['name']) 
+        land = set.loc[set['type_line'].str.contains('Basic')].sample(n=1)
 
         self.cards = [self.Card(x) for _,x in commons.iterrows()]
         self.cards.append(self.Card(bonus.iloc[0]))
+        self.cards.extend([self.Card(x) for _,x in uncommons.iterrows()])
         self.cards.append(self.Card(rare.iloc[0]))
         self.cards.extend([self.Card(x) for _,x in foils.iterrows()])
         self.cards.append(self.Card(land.iloc[0]))

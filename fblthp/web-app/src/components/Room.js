@@ -23,7 +23,9 @@ function PackGrid({ pack, onPick }) {
             {pack.map((card) => {
                 return (
                     <div className="card" key={card['id']}>
-                        <button className="button" onClick={() => {pick(card['id'])}}>{card['name']}</button>
+                        <button className="button" onClick={() => {pick(card['id'])}}>
+                            <img src={card['img']} alt={card['name']}/>
+                        </button>
                     </div>
                 )
             })}

@@ -24,7 +24,8 @@ class DraftManager():
                 p.packQueue.append(Pack(self.set))
 
             for p in self.players:
-                self.servePack(p.id, p.packQueue[0].toJson())
+                pack = p.packQueue[0]
+                self.servePack(p.id, pack.toJson())
 
         def onPick(self, playerId, pick):
             player = None
@@ -43,11 +44,11 @@ class DraftManager():
                     if len(p.packQueue) > 0:
                         return #still picking
                     
-                if round == 3:
+                if self.round == 3:
                     return #no more rounds
                 self.passRight = not self.passRight
                 self.round += 1
-                self.startRound
+                self.startRound()
                 return
 
             #pass pack to next player

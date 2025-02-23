@@ -26,7 +26,12 @@ class PackQueue():
     def push(self, pack):
         sendPack = False #send pack if no curPack
         self.queueLock.acquire()
-        self.queue.append(pack)
+        idx = 0
+        for i in range(len(self.queue)):
+            if pack.len() > self.queue[i].len():
+                break
+            idx += 1
+        self.queue.insert(idx, pack)
         if not self.curPack:
             self.curPack = self.queue.pop(0)
             sendPack = True

@@ -1,9 +1,11 @@
 from Pack import getSet, Pack
+from packQueue import PackQueue
 import uuid, random, threading
 class DraftManager():
     class Room():
 
         MIN_PLAYERS = 4
+        NUM_ROUNDS=1
         def __init__(self, servePack):
             self.set = getSet()
             self.players = []
@@ -29,18 +31,21 @@ class DraftManager():
             p.seat = len(self.players) - 1
 
         def startRound(self,):
-            for p in self.players:
-                p.packQueue.append(Pack(self.set))
+            playerCount = len(self.players)
+            for i in range(playerCount):
+                nextIdx = i + 1 if self.passRight else i -1
+                nextIdx %= playerCount
+                self.players[i].nextPlayer = self.players[nextIdx]
 
             for p in self.players:
-                pack = p.packQueue[0]
-                self.servePack(p.id, pack.toJson())
-
+                p.recievePack(Pack(self.set))
+                
         def serve(self, player, pack):
             if player.isRobot:
-                roboPick = threading.Thread
+                roboPick = threading.Thread(player.recievePack(pack))
+                roboPick.start()
             else:
-                self.servePack(player, pack)
+                self.servePack(player.id, pack.toJson())
 
         def onPick(self, playerId, pick):
             player = None
@@ -49,17 +54,14 @@ class DraftManager():
                 player = p
                 if p.id == playerId:
                     break
-            #make pick out of pack
-            nextSeat = player.seat + 1 if self.passRight else player.seat - 1
-            nextSeat %= len(self.players)
-            nextPlayer = self.players[nextSeat]
         
-            player.send(pick, nextPlayer)
+            player.pickPack(pick)
 
             self.doneCountLock.acquire()
 
             if self.lastPick == len(self.players):
-                if self.round == 3:
+                if self.round == self.NUM_ROUNDS:
+
                     return #no more rounds
                 self.passRight = not self.passRight
                 self.round += 1
@@ -76,45 +78,51 @@ class DraftManager():
             self.id = id
             self.room = room
             self.cards = []
-            self.packQueue = []
+            self.packQueue = PackQueue()
             self.seat = -1
-            self.queueLock = threading.Lock()
+            self.nextPlayer = None
 
-        def recieve(self, pack):
-            self.queueLock.acquire()
-            self.packQueue.append(pack)
-            if len(self.packQueue) == 1:
-                self.room.serve(self.id, self.packQueue[0])
+        def recievePack(self, pack):
+            send = self.packQueue.push(pack)
+            print(f'Human QueueLen {self.packQueue.len()}')
+            if send: #new curPack so serve to player
+                self.room.serve(self, self.packQueue.peek())
 
-            self.queueLock.release()
-
-        def send(self, pick, nextPlayer):
-            self.queueLock.acquire()
-            pack = self.queue.pop(0)
-            self.cards.append(pack.pick(pick))
-            self.queueLock.release()
+        def pickPack(self, pick):
+            card, pack, havePack = self.packQueue.pick(pick)
+            self.cards.append(card)
+            if self.isRobot:
+                print(f"ROBO PICK, queue length {self.packQueue.len()}")
+            else:
+                print(f"Human pick, queue length {self.packQueue.len()}")
 
             if pack.len() == 0:
                 self.room.playerFinished()
-            else:
-                nextPlayer.revieve(pack) #make thread
-
-            #then serve self if queue > 1
+                return
+            if havePack:
+                self.room.serve(self, self.packQueue.peek())  
+            self.nextPlayer.recievePack(pack) 
 
 
 
     class RoboDrafter(Player):
         def __init__(self, room):
-            super.__init__(uuid.uuid4(), room)
+            super().__init__( uuid.uuid4(), room)
             self.isRobot = True
 
-        def pick(self):
-            self.room.onPick(self.id, random.randint(0, self.packQueue[0].len() - 1))
 
 
-        #override receive Probably idk
+        def recievePack(self, pack):
+            print("ROBO RECIEVE")
+            pick = self.packQueue.push(pack)
+            print(pick)
+            if pick: #new curPack so pick
+                cardNum = self.packQueue.peek().len()
+                pickThread = threading.Thread(self.pickPack(random.randint(0, cardNum - 1)))
+                pickThread.start()
+                
 
-
+                
 
 
     def __init__(self,startRoom,servePack):

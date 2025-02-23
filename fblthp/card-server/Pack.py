@@ -80,7 +80,6 @@ class Pack():
         pack = []
         i = 0
         for card in self.cards:
-            print(card)
             pack.append(card.toJson(i))
             i+=1
         return {'pack':pack}

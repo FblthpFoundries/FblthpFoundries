@@ -1,4 +1,4 @@
-from Pack import getSet, Pack
+from Pack import getSet, Pack, getSetList
 from packQueue import PackQueue
 import uuid, random, threading
 class DraftManager():
@@ -30,6 +30,11 @@ class DraftManager():
             self.players.append(p)
             p.seat = len(self.players) - 1
 
+
+        """
+        sets up round by setting each player's next player
+        and serving a pack to each
+        """
         def startRound(self,):
             playerCount = len(self.players)
             for i in range(playerCount):
@@ -39,14 +44,20 @@ class DraftManager():
 
             for p in self.players:
                 p.recievePack(Pack(self.set))
-                
+
+        """
+        Serves packs to players, both robot and mortally challenged
+        """
         def serve(self, player, pack):
             if player.isRobot:
                 roboPick = threading.Thread(player.recievePack(pack))
                 roboPick.start()
             else:
                 self.servePack(player.id, pack.toJson())
-
+        """
+        After recieving a pick from client, updates internal state
+        appropriately by picking card from pack for the player
+        """
         def onPick(self, playerId, pick):
             player = None
             #find player based on ID
@@ -82,19 +93,17 @@ class DraftManager():
             self.seat = -1
             self.nextPlayer = None
 
+        """
+        Adds pack to queue and serves pack to player if player waiting for pack
+        """
         def recievePack(self, pack):
             send = self.packQueue.push(pack)
-            print(f'Human QueueLen {self.packQueue.len()}')
             if send: #new curPack so serve to player
                 self.room.serve(self, self.packQueue.peek())
 
         def pickPack(self, pick):
             card, pack, havePack = self.packQueue.pick(pick)
             self.cards.append(card)
-            if self.isRobot:
-                print(f"ROBO PICK, queue length {self.packQueue.len()}")
-            else:
-                print(f"Human pick, queue length {self.packQueue.len()}")
 
             if pack.len() == 0:
                 self.room.playerFinished()
@@ -113,7 +122,6 @@ class DraftManager():
 
 
         def recievePack(self, pack):
-            print("ROBO RECIEVE")
             pick = self.packQueue.push(pack)
             print(pick)
             if pick: #new curPack so pick
@@ -130,6 +138,10 @@ class DraftManager():
         self.players = {}
         self.startRoom = startRoom
         self.servePack = servePack
+        self.sets = getSetList()
+
+    def getSets(self,):
+        return self.sets 
 
 
     def on_connect(self, player):

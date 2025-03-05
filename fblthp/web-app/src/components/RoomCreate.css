@@ -1,0 +1,15 @@
+.setList{
+    color: black;
+    list-style-type: none;
+    align-self: right;
+    width: 20%;
+}
+
+.listElm:hover{
+    background-color: darkturquoise;
+}
+
+.selection{
+    color:black;
+    align-self: right;
+}

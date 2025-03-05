@@ -79,7 +79,7 @@ function DraftRoom() {
     const displayPack = hasPack ? <PackGrid pack={pack} onPick={pickedCard} /> : <p>waiting for pack</p>
 
     return (<>
-        {roomState ? displayPack : <p>Waiting for room to start</p>}
+        {roomState ? displayPack : <p>Waiting for pack</p>}
     </>)
 }
 

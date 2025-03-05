@@ -3,8 +3,21 @@ from json import loads
 import pandas as pd
 import random
 
+scryfallEndpoint = 'https://api.scryfall.com/' 
+
+def getSetList():
+    setTypes = ['core', 'expansion', 'masters', 'draft_innovation']
+    allSets = loads(get(f'{scryfallEndpoint}/sets').text)['data']
+    draftSets = [] 
+    for s in allSets:
+        if s['set_type'] in setTypes:
+            draftSets.append({'name': s['name'], 'code': s['code']})
+
+    return draftSets
+
+
 def getSet(set='mh3'):
-    setURI = loads(get(f'https://api.scryfall.com/sets/{set}').text)['search_uri']
+    setURI = loads(get(f'{scryfallEndpoint}sets/{set}').text)['search_uri']
     page = loads(get(setURI).text)
     set = pd.DataFrame(page['data'])
     while page['has_more'] == True:

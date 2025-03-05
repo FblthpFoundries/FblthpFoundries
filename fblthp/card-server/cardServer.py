@@ -4,6 +4,7 @@ from flask_socketio import SocketIO, send, emit
 import  cardFactory, cardGenerator, artFactory
 import json, logging, sys, os, base64
 from draftManager import DraftManager
+from flask_cors import CORS, cross_origin
 
 
 socketio = SocketIO(logger = True, engineio_logger = True)
@@ -12,7 +13,9 @@ socketio = SocketIO(logger = True, engineio_logger = True)
 
 def create_app():
     app = Flask(__name__)
+    cors = CORS(app)
     app.config['SECRET_KEY'] = 'Fblthp\'s Balls'
+    app.config['CORS_HEADER'] = 'Content-Type'
     logging.basicConfig(filename='log.log',
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         filemode='a',
@@ -48,6 +51,10 @@ def create_app():
         return  render_template('simple.html', image = img)
 
     '''
+
+    @app.route('/getSets')
+    def getSets():
+        return draftManager.getSets()
 
     @app.route('/startDraft')
     def testPack():

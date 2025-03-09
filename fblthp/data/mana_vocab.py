@@ -103,6 +103,18 @@ class ManaVocabulary:
         cleaned = re.findall(r'\{[^}]*\}', mana_cost)
         return cleaned
     
+    def mana_value(self, mana_cost: str) -> int:
+        cleaned = self._parse_mana_string(mana_cost)
+        total = 0
+        for item in cleaned:
+            if item in ["{X}"]:
+                total += 0
+            if re.match(r"\{\d+\}", item):
+                total += int(item[1:-1])
+            else:
+                total += 1
+
+        return total
     @property
     def vocab_size(self) -> int:
         """Return the size of the vocabulary"""

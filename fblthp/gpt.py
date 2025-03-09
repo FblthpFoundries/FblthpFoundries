@@ -2,6 +2,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer
 from csv2tokens import getCorpus
 from datasets import load_dataset
+from data.datasets import MagicCardDataset
 from transformers import DataCollatorForLanguageModeling
 device = 'cuda'
 block_size = 256

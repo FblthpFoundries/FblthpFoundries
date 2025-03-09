@@ -192,6 +192,7 @@ class DecomposedEncoder(nn.Module):
 
 class SmallAttributesDecoder(nn.Module):
     def __init__(self, latent_dim, embed_dim, dropout_rate=0.1):
+        super(SmallAttributesDecoder, self).__init__()
         self.shared_features = nn.Sequential(
             nn.LayerNorm(latent_dim),
             nn.Linear(latent_dim, embed_dim),
@@ -475,16 +476,16 @@ class ADVAE(nn.Module):
         print(f"  Number of parameters: {params / 1e6:.1f}M")
         print(f"  Total Model Size: {total_size / (1024 ** 2):.2f} MB")  # Convert to megabytes (MB)\
 
-    def forward(self, x, target_seq=None, max_len=None):
+    def forward(self, x, target_seq=None):
         # Encode the input to get mu and logvar
-        mu, logvar = self.encoder(x.to(device))  # Move x to the device
+        mu, logvar = self.encoder(x)  # Move x to the device
         # Reparameterization to get latent vector z
         z = self.reparameterize(mu, logvar)
         
         # Decode the latent vector z to generate a sequence
-        logits = self.decoder(z, target_seq=target_seq)
+        logits_dict = self.decoder(z, target_seq=target_seq)
         
-        return logits, mu, logvar
+        return logits_dict, mu, logvar
     
     def generate(self, z, max_len=None, sos_token=1, eos_token=2):
         """
@@ -524,23 +525,41 @@ class ADVAE(nn.Module):
         return generated_sequence[:, :]
 
     
-    def ad_vae_loss(self, decoded_x, x, mu, logvar, kl_weight=1.0, free_bits=0.1, pad_token_idx=0):
-        """VAE loss function combining reconstruction loss and KL divergence with KL annealing"""
-        decoded_x = decoded_x.float()[:, :-1, :]  # Remove last prediction for target alignment
-        left = decoded_x.contiguous().view(-1, decoded_x.size(-1))
-        right = x[:, 1:].reshape(-1).to(device)
-        recon_loss = nn.CrossEntropyLoss(ignore_index=pad_token_idx)(left, right)
+    def vae_loss(self, decoded_x, x, mu, logvar, kl_weight=1.0, free_bits=0.1, pad_token_idx=0):
+        """VAE loss function for ADVAE combining over multiple attributes"""
 
+        cross_entropies = ["mana", "name", "type", "oracle", "flavor", "power", "toughness", "loyalty"]
+        # {
+        #     "name_logits": name_logits,
+        #     "mana_logits": mana_logits,
+        #     "type_logits": type_logits,
+        #     "oracle_logits": oracle_logits,
+        #     "flavor_logits": flavor_logits,
+        #     "power_logits": power,
+        #     "toughness_logits": toughness,
+        #     "loyalty_logits": loyalty,
+        #     "has_pt": has_pt,
+        #     "has_loyalty": has_loyalty
+        # }
+
+        total_loss = 0
+
+        for attribute in cross_entropies:
+            left = decoded_x[f"{attribute}_logits"].float()[:, :-1, :]  # Remove last prediction for target alignment
+            right = x[f"{attribute}_tokens"][:, 1:].reshape(-1).to(device)
+            recon_loss = nn.CrossEntropyLoss(ignore_index=pad_token_idx)(left, right)
+            total_loss += recon_loss
+
+        
+        
+        
         def free_bits_kl(mu, logvar, free_bits=0.1):
             kl_loss_per_dim = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
             regularized_kl_loss = torch.clamp(kl_loss_per_dim, min=free_bits)
             return regularized_kl_loss.sum(dim=-1).mean()
 
-
-        
         # KL divergence loss
         kld_loss = free_bits_kl(mu, logvar, free_bits=free_bits)
-
 
         scaled_kld_loss = kl_weight * kld_loss
         

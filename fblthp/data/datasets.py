@@ -1,258 +1,526 @@
+"""
+Magic: The Gathering Card Dataset Processor
+
+This module provides functionality to download, process, and prepare Magic card data
+from Scryfall API for use in machine learning models.
+"""
+
 import os
+import ast
+import re
+import logging
+from typing import Tuple, Dict, List, Optional, Union, Any
+
+from .mana_vocab import ManaVocabulary
+from .tokenizers_help import get_mtg_tokenizer
+
 import pandas as pd
 import requests
-from tokenizers import Tokenizer
-from .mana_vocab import ManaVocabulary
-import re
-from torch.utils.data import Dataset
 import torch
-from torch.utils.data import DataLoader, random_split
-import ast
+from torch.utils.data import Dataset, DataLoader, random_split
+from tokenizers import Tokenizer
+from tqdm import tqdm
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Constants
 DATA_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_DIR = os.path.join(DATA_DIR, 'datasets')
+os.makedirs(DATASET_DIR, exist_ok=True)
+DEFAULT_TOKENIZER_PATH = os.path.join(DATASET_DIR, "wordpiece_tokenizer.json")
+DEFAULT_CARDS_PATH = os.path.join(DATASET_DIR, 'cards.csv')
+DEFAULT_LINES_PATH = os.path.join(DATASET_DIR, 'lines.txt')
+DEFAULT_LABELED_PATH = os.path.join(DATASET_DIR, 'labeled.csv')
+MOMIR_LINES_PATH = os.path.join(DATASET_DIR, "momir_lines.txt")
+
+# Token sequence lengths determined from analysis
+TOKEN_LENGTHS = {
+    'mana': 18,
+    'oracle': 90, 
+    'name': 20, 
+    'type': 15, 
+    'flavor_text': 50
+}
+
+# Feature mappings for card data
+FEATURE_DICT = {
+    'type_line': '<tl>',
+    'name': '<name>',
+    'mana_cost': '<mc>',
+    'oracle_text': '<ot>',
+    'power': '<power>',
+    'toughness': '<toughness>',
+    'loyalty': '<loyalty>',
+    'flavor_text': '<ft>',
+}
+
+SPECIAL_TOKENS = {
+    'eos': '<eos>',
+    'pad': '<pad>'
+}
 
 
 
 class MagicCardDataset(Dataset):
-    def __init__(self, max_len=125, target="labeled.csv", prepare_corpus=False, tokenizer_path=os.path.join(DATA_DIR, "wordpiece_tokenizer.json")):
-        self.tokenizer_path = tokenizer_path
+    """Dataset class for Magic: The Gathering cards.
+    
+    This dataset handles downloading card data from Scryfall API,
+    preparing and processing the data, and providing access to
+    tokenized card text for training machine learning models.
+    """
+
+    def __init__(self, 
+                 max_len: int = 125, 
+                 target: str = DEFAULT_LABELED_PATH, 
+                 prepare_corpus: bool = False,
+                 tokenizer_path: str = DEFAULT_TOKENIZER_PATH,
+                 cards_path: str = DEFAULT_CARDS_PATH):
+        """Initialize the Magic Card Dataset.
+        
+        Args:
+            max_len: Maximum length of token sequences
+            target: Path to the labeled CSV file
+            prepare_corpus: Whether to download and prepare data if it doesn't exist
+            tokenizer_path: Path to the tokenizer JSON file
+            cards_path: Path to the cards CSV file
+        """
+        self.tokenizer_path = "wordpiece_tokenizer.json"
         self.max_len = max_len
+        self.cards_path = cards_path
         
         if prepare_corpus:
             self.prepare_corpus()
 
-        self.corpus_dataframe = pd.read_csv(target)
 
-    def __len__(self):
+        try:
+            self.corpus_dataframe = pd.read_csv(target)
+        except Exception as e:
+            logger.error(f"Failed to load dataset from {target}: {e}")
+            raise
+
+    def __len__(self) -> int:
+        """Return the number of items in the dataset.
+        
+        Returns:
+            Number of items in the dataset
+        """
         return len(self.corpus_dataframe)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> List[Any]:
+        """Get a specific item from the dataset by index.
+        
+        Args:
+            idx: Index of the item to retrieve
+            
+        Returns:
+            List of values for the specified card
+        """
         row = self.corpus_dataframe.iloc[idx]
         return row.tolist()
     
-    def prepare_corpus(self):
-        if not os.path.exists(os.path.join(DATA_DIR, 'cards.csv')):
-            self.pull_scryfall_to_csv(os.path.join(DATA_DIR, 'cards.csv'))
-        if not os.path.exists(os.path.join(DATA_DIR, 'labeled.csv')):
-            self._prepare_corpus(os.path.join(DATA_DIR, 'cards.csv'), os.path.join(DATA_DIR, 'labeled.csv'))
+    def prepare_corpus(self) -> None:
+        """Prepare the corpus by downloading and processing card data if needed."""
+        if not os.path.exists(DEFAULT_CARDS_PATH):
+            self.pull_scryfall_to_csv()
+                
+        if not os.path.exists(DEFAULT_LABELED_PATH):
+            self._prepare_corpus()
+
     @staticmethod
-    def pull_scryfall_to_csv(filename):
-        print("Pulling data from Scryfall API...")
-        response = requests.get('https://api.scryfall.com/bulk-data/oracle-cards')
-        response.raise_for_status()
+    def pull_scryfall_to_csv() -> None:
+        """Pull card data from Scryfall API and save to CSV.
         
-        json_uri = response.json()['download_uri']
-        card_data = requests.get(json_uri).json()
+        Args:
+            filename: Path to save the card data CSV
+        """
+        logger.info("Pulling data from Scryfall API...")
+        try:
+            # Get the bulk data URI
+            response = requests.get('https://api.scryfall.com/bulk-data/oracle-cards')
+            response.raise_for_status()
+            
+            json_uri = response.json()['download_uri']
+            
+            # Download the card data with progress bar
+            logger.info(f"Downloading cards from {json_uri}")
+            response = requests.get(json_uri, stream=True)
+            response.raise_for_status()
+            
+            # Save the JSON response to memory
+            card_data = response.json()
+            
+            features = ['mana_cost', 'name', 'type_line', 'power', 'toughness', 
+                       'oracle_text', 'loyalty', 'flavor_text']
+            
+            
+            # Process and save the cards to CSV with progress bar
+            logger.info(f"Processing {len(card_data)} cards...")
+            
+            with open(DEFAULT_CARDS_PATH, 'w', encoding='utf-8') as f:
+                f.write(','.join(features) + '\n')
+                
+                for card in tqdm(card_data, desc="Processing cards"):
+                    # Skip tokens, double-faced cards, and non-paper cards
+                    if ('Token' in card.get('type_line', '') or 
+                        'card_faces' in card or 
+                        'paper' not in card.get('games', [])):
+                        continue
+                    
+                    row = []
+                    for feature in features:
+                        # Clean up the text
+                        thing = card.get(feature, "<empty>")
+                        thing = str(thing).replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {")
+                        row.append(f'"{thing}"')
+                        
+                    f.write(','.join(row) + '\n')
+            logger.info(f"Card data saved to {DEFAULT_CARDS_PATH}")
 
-        features = ['mana_cost', 'name', 'type_line', 'power', 'toughness', 'oracle_text', 'loyalty', 'flavor_text']
+            with open(DEFAULT_LINES_PATH, 'w', encoding='utf-8') as f:
+                
+                for card in tqdm(card_data, desc="Processing cards"):
+                    # Skip tokens, double-faced cards, and non-paper cards
+                    if ('Token' in card.get('type_line', '') or 
+                        'card_faces' in card or 
+                        'paper' not in card.get('games', [])):
+                        continue
+                    
+                    row = []
+                    for feature in features:
+                        # Clean up the text
+                        thing = card.get(feature, "<empty>")
+                        thing = str(thing).replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {")
+                        row.append(f'{FEATURE_DICT[feature]}{thing}<\\{FEATURE_DICT[feature][1:]}')
+                        
+                    f.write(''.join(row) + '\n')
+            logger.info(f"Card data saved to {DEFAULT_LINES_PATH}")
+
+
+
+
+            mv = ManaVocabulary()
+            #Momir Lines
+            with open(MOMIR_LINES_PATH, 'w', encoding='utf-8') as f:
+                
+                for card in tqdm(card_data, desc="Processing cards"):
+                    # Skip tokens, double-faced cards, and non-paper cards
+                    if ('Token' in card.get('type_line', '') or 
+                        'card_faces' in card or 
+                        'paper' not in card.get('games', [])):
+                        continue
+                    
+                    row = []
+                    row.append(f'<mv>{mv.mana_value(card.get("mana_cost", ""))}<\\mv>')
+                    for feature in features:
+                        # Clean up the text
+                        thing = card.get(feature, "<empty>")
+                        thing = str(thing).replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {")
+                        row.append(f'{FEATURE_DICT[feature]}{thing}<\\{FEATURE_DICT[feature][1:]}')
+                    if 'Creature' not in card.get("type_line", ""):
+                        continue
+                    f.write(''.join(row) + '\n')
+            logger.info(f"Card data saved to {MOMIR_LINES_PATH}")
+            
+        except requests.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            raise
+        except (KeyError, ValueError) as e:
+            logger.error(f"Error processing JSON data: {e}")
+            raise
+        except IOError as e:
+            logger.error(f"Error writing to file: {e}")
+            raise
+
+    def _extract_feature(self, text: str, attribute: str) -> Optional[str]:
+        """Extract a feature from text using regex.
         
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(','.join(features) + '\n')
-            for card in card_data:
-                if 'Token' in card['type_line'] or 'card_faces' in card or 'paper' not in card['games']:
-                    continue
-                row = []
-                for feature in features:
-                    thing = card.get(feature, "<empty>").replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {" )
-                    row.append(f'"{thing}"')
-                f.write(','.join(row) + '\n')
+        Args:
+            text: The text to search
+            attribute: The attribute to extract
+            
+        Returns:
+            The extracted text or None if not found
+        """
+        pattern = fr"<{attribute}>(.*?)<\\{attribute}>"
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip()
+        return None
 
-        print(f"Data saved to {filename}")
-
-    def _prepare_corpus(self, cards_csv, filename):
-        print("Preparing corpus...")
-        df = pd.read_csv(cards_csv)
-
-        feature_dict = {
-            'type_line': '<tl>',
-            'name': '<name>',
-            'mana_cost': '<mc>',
-            'oracle_text': '<ot>',
-            'power': '<power>',
-            'toughness': '<toughness>',
-            'loyalty': '<loyalty>',
-            'flavor_text': '<ft>',
-        }
-
-        special_tokens = {
-            'eos': '<eos>'
-        }
-
-        def yoink(text, attribute):
-            pattern = fr"<{attribute}>(.*?)<\\{attribute}>"
-            match = re.search(pattern, text)
-            if match:
-                return match.group(1).strip()
-            return None
-        text_tokenizer = Tokenizer.from_file(self.tokenizer_path)
-        o_tokenizer = Tokenizer.from_file(self.tokenizer_path)
-        o_tokenizer.enable_padding(pad_id=0, pad_token='<pad>', length=90)
-        o_tokenizer.enable_truncation(max_length=90)
-        n_tokenizer = Tokenizer.from_file(self.tokenizer_path)
-        n_tokenizer.enable_padding(pad_id=0, pad_token='<pad>', length=20)
-        n_tokenizer.enable_truncation(max_length=20)
-        t_tokenizer = Tokenizer.from_file(self.tokenizer_path)
-        t_tokenizer.enable_padding(pad_id=0, pad_token='<pad>', length=15)
-        t_tokenizer.enable_truncation(max_length=15)
-        f_tokenizer = Tokenizer.from_file(self.tokenizer_path)
-        f_tokenizer.enable_padding(pad_id=0, pad_token='<pad>', length=50)
-        f_tokenizer.enable_truncation(max_length=50)
+    def _prepare_corpus(self) -> None:
+        """Process raw card data into a tokenized corpus.
+        
+        Args:
+            cards_csv: Path to the raw cards CSV
+            output_filename: Path to save the processed corpus
+        """
+        logger.info("Preparing corpus...")
+        
+        df = pd.read_csv(DEFAULT_CARDS_PATH)
+        
+        # Initialize tokenizers
+        text_tokenizer = get_mtg_tokenizer()
+        
+        # Create tokenizers for each field with appropriate padding
+        tokenizers = {}
+        for field, length in [
+            ('oracle', TOKEN_LENGTHS['oracle']), 
+            ('name', TOKEN_LENGTHS['name']),
+            ('type', TOKEN_LENGTHS['type']), 
+            ('flavor', TOKEN_LENGTHS['flavor_text'])
+        ]:
+            tokenizers[field] = text_tokenizer
+            tokenizers[field].enable_padding(
+                pad_id=0, 
+                pad_token=SPECIAL_TOKENS['pad'], 
+                length=length
+            )
+            tokenizers[field].enable_truncation(max_length=length)
 
         mana_tokenizer = ManaVocabulary()
+        
+        # Process data with progress bar
         corpus = pd.DataFrame(columns=['card'])
-        for _, row in df.iterrows():
+        
+        logger.info(f"Processing {len(df)} cards into corpus...")
+        for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing corpus"):
             text = ''
-            for feature, token in feature_dict.items():
-                value = row.get(feature, '<empty>')
+            for feature, token in FEATURE_DICT.items():
+                value = row.get(feature, '')
                 text += f' {token} {value} {token[:1]}\\{token[1:]}'
-            card = text.strip() + f' {special_tokens["eos"]}'
-            #print(corpus)
-            #print(card)
+            card = text.strip() + f' {SPECIAL_TOKENS["eos"]}'
             corpus.loc[len(corpus)] = [card]
         
-        corpus["tokens"] = corpus["card"].apply(lambda x: text_tokenizer.encode(x, ).ids)
-        corpus["mc"] = corpus["card"].apply(lambda x: yoink(x, "mc"))
-        corpus["power"] = corpus["card"].apply(lambda x: yoink(x, "power"))
-        corpus["toughness"] = corpus["card"].apply(lambda x: yoink(x, "toughness"))
-        corpus["cmc"] = corpus["mc"].apply(lambda x: sum([int(y) if y.isdigit() else 1 for y in x.replace(" ", "").replace("{", "").replace("}", "")]))
-        corpus["power"] = corpus["power"].apply(lambda x: int(x) if x.isdigit() else x)
-        corpus["toughness"] = corpus["toughness"].apply(lambda x: int(x) if x.isdigit() else x)
-
-        corpus["oracle_text"] = corpus["card"].apply(lambda x: yoink(x, "ot"))
-        corpus["name"] = corpus["card"].apply(lambda x: yoink(x, "name"))
-        corpus["type_line"] = corpus["card"].apply(lambda x: yoink(x, "tl"))
-        corpus["flavor_text"] = corpus["card"].apply(lambda x: yoink(x, "ft"))
-
-        corpus["oracle_tokens"] = corpus["oracle_text"].apply(
-            lambda x: o_tokenizer.encode(x).ids)
-        corpus["name_tokens"] = corpus["name"].apply(
-            lambda x: n_tokenizer.encode(x).ids)
-        corpus["type_line_tokens"] = corpus["type_line"].apply(
-            lambda x: t_tokenizer.encode(x).ids)
-        corpus["flavor_text_tokens"] = corpus["flavor_text"].apply(
-            lambda x: f_tokenizer.encode(x).ids)
-        corpus["mana_tokens"] = corpus["mc"].apply(lambda x: mana_tokenizer.encode(x, pad_to_length=18).tolist())
-            
-
-        corpus.to_csv(f'{filename}', index=False)
-
-        print(f"Corpus saved to {filename}")
-
-
-def collate_fn(batch):
-        def parse(text):
-            parsed_list = ast.literal_eval(text)
-            if parsed_list[0] != 1:
-                parsed_list = [1] + parsed_list[:-1]
-            return parsed_list
+        # Extract and tokenize fields
+        logger.info("Tokenizing card fields...")
+        corpus["tokens"] = corpus["card"].apply(lambda x: text_tokenizer.encode(x).ids)
         
-        #print(batch)
-        ids = [parse(x[1]) for x in batch]
+        # Extract fields
+        for field, tag in [
+            ('mc', 'mc'), ('power', 'power'), ('toughness', 'toughness'),
+            ('oracle_text', 'ot'), ('name', 'name'), 
+            ('type_line', 'tl'), ('flavor_text', 'ft')
+        ]:
+            corpus[field] = corpus["card"].apply(lambda x: self._extract_feature(x, tag))
+        
+        # Process numeric fields
+        corpus["cmc"] = corpus["mc"].apply(
+            lambda x: sum([int(y) if y.isdigit() else 1 
+                            for y in str(x).replace(" ", "").replace("{", "").replace("}", "")]) 
+            if x else 0
+        )
+        
+        # Convert power/toughness to int when possible
+        for field in ['power', 'toughness']:
+            corpus[field] = corpus[field].apply(
+                lambda x: int(x) if x and str(x).isdigit() else x
+            )
+
+        # Tokenize text fields
+        for field in ['oracle_text', 'name', 'type_line', 'flavor_text']:
+            token_field = f"{field.split('_')[0]}_tokens"
+            corpus[token_field] = corpus[field].apply(
+                lambda x: tokenizers[field.split('_')[0]].encode(str(x) if x else "").ids
+            )
+        
+        # Tokenize mana cost
+        corpus["mana_tokens"] = corpus["mc"].apply(
+            lambda x: mana_tokenizer.encode(str(x) if x else "", 
+                                            pad_to_length=TOKEN_LENGTHS['mana']).tolist()
+        )
+
+        # Save the processed corpus
+        corpus.to_csv(DEFAULT_LABELED_PATH, index=False)
+        logger.info(f"Corpus saved to {DEFAULT_LABELED_PATH}")
+
+
+
+
+
+
+
+
+def parse_token_list(text: str) -> List[int]:
+    """Parse a string representation of a token list.
+    
+    Ensures the first token is 1 (likely the BOS token).
+    
+    Args:
+        text: String representation of a token list
+        
+    Returns:
+        List of token IDs
+    """
+    try:
+        parsed_list = ast.literal_eval(text)
+        # Ensure the first token is 1 (BOS token)
+        if parsed_list and parsed_list[0] != 1:
+            parsed_list = [1] + parsed_list[:-1]
+        return parsed_list
+    except (SyntaxError, ValueError) as e:
+        logger.error(f"Failed to parse token list: {e}")
+        return [1]  # Return default if parsing fails
+
+
+def collate_fn(batch: List[List]) -> Dict[str, Any]:
+    """Collate function for DataLoader to process a batch of samples.
+    
+    Args:
+        batch: Batch of samples from the dataset
+        
+    Returns:
+        Dictionary of tensors and values
+    """
+    try:
+        # Extract fields
+        ids = [parse_token_list(x[1]) for x in batch]
         ids = torch.tensor(ids)
-        originals = [x[0] for x in batch]
-        mc = [x[2] for x in batch]
-        power = [x[3] for x in batch]
-        toughness = [x[4] for x in batch]
-        cmc = [x[5] for x in batch]
-        ot = [x[6] for x in batch]
-        name = [x[7] for x in batch]
-        tl = [x[8] for x in batch]
-        ft = [x[9] for x in batch]
-        ot_tok = [parse(x[10]) for x in batch]
-        name_tok = [parse(x[11]) for x in batch]
-        tl_tok = [parse(x[12]) for x in batch]
-        ft_tok = [parse(x[13]) for x in batch]
-        mana_tok = [parse(x[14]) for x in batch]
+        
+        # Extract all other fields
+        field_names = [
+            "originals", "mc", "power", "toughness", "cmc", 
+            "oracle_text", "name", "type_line", "flavor_text"
+        ]
+        fields = {field_names[i]: [x[i] for x in batch] for i in range(len(field_names))}
+        
+        # Extract and parse token fields
+        token_fields = [
+            "oracle_tokens", "name_tokens", "type_line_tokens", 
+            "flavor_text_tokens", "mana_tokens"
+        ]
+        parsed_tokens = {
+            field: [parse_token_list(x[i+10]) for x in batch] 
+            for i, field in enumerate(token_fields)
+        }
+        
+        # Combine all fields
+        result = {"ids": ids, **fields, **parsed_tokens}
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in collate function: {e}")
+        raise
 
-        return {
-            "ids": ids, 
-            "originals": originals,
-            "mc": mc,
-            "power": power,
-            "toughness": toughness,
-            "cmc": cmc,
-            "oracle_text": ot,
-            "name": name,
-            "type_line": tl,
-            "flavor_text": ft,
-            "oracle_tokens": ot_tok,
-            "name_tokens": name_tok,
-            "type_line_tokens": tl_tok,
-            "flavor_text_tokens": ft_tok,
-            "mana_tokens": mana_tok
-            }
 
-def get_dataloaders(test_set_portion, seed, batch_size):
-    # DataLoader
-    dataset = MagicCardDataset(target="data/labeled.csv", prepare_corpus=True)
+def get_dataloaders(
+    test_set_portion: float = 0.2, 
+    seed: int = 42, 
+    batch_size: int = 32,
+    target_path: str = DEFAULT_LABELED_PATH,
+    prepare_corpus: bool = False
+) -> Tuple[DataLoader, DataLoader]:
+    """Create training and test DataLoaders for the Magic card dataset.
+    
+    Args:
+        test_set_portion: Portion of data to use for testing (0.0-1.0)
+        seed: Random seed for reproducibility
+        batch_size: Batch size for DataLoaders
+        target_path: Path to labeled CSV file
+        prepare_corpus: Whether to download and prepare data if it doesn't exist
+        
+    Returns:
+        Tuple of (train_dataloader, test_dataloader)
+    """
+    logger.info("Creating dataloaders...")
+
+    # Create dataset
+    dataset = MagicCardDataset(target=target_path, prepare_corpus=prepare_corpus)
 
     # Split the dataset into training and validation sets
     train_size = int(len(dataset) * (1 - test_set_portion))
     test_size = len(dataset) - train_size
-    torch.manual_seed(seed) # Seed so the random split is the same and doesn't contaminate when reloading a model
+    
+    # Set random seed for reproducibility
+    torch.manual_seed(seed)
     train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
 
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, 
-                                  pin_memory=True, num_workers=2, persistent_workers=True, collate_fn=collate_fn)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, 
-                                 pin_memory=True, num_workers=2, persistent_workers=True, collate_fn=collate_fn)
+    # Create DataLoaders
+    train_dataloader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True, 
+        pin_memory=True, 
+        num_workers=2, 
+        persistent_workers=True, 
+        collate_fn=collate_fn
+    )
+    
+    test_dataloader = DataLoader(
+        test_dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        pin_memory=True, 
+        num_workers=2, 
+        persistent_workers=True, 
+        collate_fn=collate_fn
+    )
 
+    logger.info(f"Created dataloaders - Train: {len(train_dataset)} samples, Test: {len(test_dataset)} samples")
     return train_dataloader, test_dataloader
 
-if __name__ == "__main__":
-    td, tsd = get_dataloaders(0, 42, 1)
-    datas = [[],[],[],[],[]]
-    maxes = [0,0,0,0,0]
-    max_items = [None, None, None, None, None]
-    for batch in td:
-        mana_seq_len = torch.nonzero(torch.tensor(batch["mana_tokens"])).size(0)
-        datas[0].append(mana_seq_len)
-        if mana_seq_len > maxes[0]:
-            maxes[0] = mana_seq_len
-            max_items[0] = torch.tensor(batch["mana_tokens"])
-        
-        
-        oracle_seq_len = torch.nonzero(torch.tensor(batch["oracle_tokens"])).size(0)
-        datas[1].append(oracle_seq_len)
-        if oracle_seq_len > maxes[1]:
-            maxes[1] = oracle_seq_len
-            max_items[1] = torch.tensor(batch["oracle_tokens"])
 
-        name_seq_len = torch.nonzero(torch.tensor(batch["name_tokens"])).size(0)
-        datas[2].append(name_seq_len)
-        if name_seq_len > maxes[2]:
-            maxes[2] = name_seq_len
-            max_items[2] = torch.tensor(batch["name_tokens"])
-
-        type_line_seq_len = torch.nonzero(torch.tensor(batch["type_line_tokens"])).size(0)
-        datas[3].append(type_line_seq_len)
-        if type_line_seq_len > maxes[3]:
-            maxes[3] = type_line_seq_len
-            max_items[3] = torch.tensor(batch["type_line_tokens"])
-        
-        flavor_text_seq_len = torch.nonzero(torch.tensor(batch["flavor_text_tokens"])).size(0)
-        datas[4].append(flavor_text_seq_len)
-        if flavor_text_seq_len > maxes[4]:
-            maxes[4] = flavor_text_seq_len
-            max_items[4] = torch.tensor(batch["flavor_text_tokens"])
-    print(maxes)
-
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    tokenizer = Tokenizer.from_file(os.path.join(DATA_DIR, "wordpiece_tokenizer.json"))
-    # for item in max_items [1:]:
-    #     print(item)
-    #     print(tokenizer.decode(item.tolist()[0]))
-
-    for array in datas:
-        data = np.array(array)
-        plt.figure(figsize=(10, 6))
-        plt.hist(data, bins='auto', edgecolor='black')
-        plt.title('Histogram of Text Sequence Lengths')
-        plt.xlabel('Sequence Length')
-        plt.ylabel('Frequency')
-        plt.show()
-
-    #17 90 20 15 50
+def analyze_sequence_lengths(dataloader: DataLoader) -> None:
+    """Analyze and visualize sequence lengths in the dataset.
     
+    Args:
+        dataloader: DataLoader to analyze
+    """
+    try:
+        import numpy as np
+        import matplotlib.pyplot as plt
+        
+        logger.info("Analyzing sequence lengths...")
+        
+        # Fields to analyze
+        fields = ["mana_tokens", "oracle_tokens", "name_tokens", "type_line_tokens", "flavor_text_tokens"]
+        datas = [[] for _ in range(len(fields))]
+        maxes = [0 for _ in range(len(fields))]
+        max_items = [None for _ in range(len(fields))]
+        
+        # Process batches with progress bar
+        for batch in tqdm(dataloader, desc="Analyzing sequences"):
+            for i, field in enumerate(fields):
+                # Calculate non-zero sequence length
+                seq_len = torch.nonzero(torch.tensor(batch[field])).size(0)
+                datas[i].append(seq_len)
+                
+                # Track maximum length and example
+                if seq_len > maxes[i]:
+                    maxes[i] = seq_len
+                    max_items[i] = torch.tensor(batch[field])
+        
+        # Print maximum lengths
+        logger.info(f"Maximum sequence lengths: {maxes}")
+        
+        # Plot histograms
+        for i, (field, data) in enumerate(zip(fields, datas)):
+            data_array = np.array(data)
+            plt.figure(figsize=(10, 6))
+            plt.hist(data_array, bins='auto', edgecolor='black')
+            plt.title(f'Histogram of {field} Sequence Lengths')
+            plt.xlabel('Sequence Length')
+            plt.ylabel('Frequency')
+            plt.savefig(f"{field}_histogram.png")
+            plt.close()
+            
+        logger.info("Analysis complete. Histograms saved as PNG files.")
+        
+    except ImportError:
+        logger.warning("Matplotlib or numpy not available. Skipping visualization.")
+    except Exception as e:
+        logger.error(f"Error during sequence length analysis: {e}")
+
+
+if __name__ == "__main__":
+    # Example usage
+    train_dataloader, test_dataloader = get_dataloaders(
+        test_set_portion=0.1,
+        seed=42,
+        batch_size=1,
+        prepare_corpus=True
+    )
+    
+    # Analyze sequence lengths
+    #analyze_sequence_lengths(train_dataloader)

@@ -301,7 +301,7 @@ if __name__ == '__main__':
 
     seed = 42
     test_set_portion = 0.05
-    batch_size = 32
+    batch_size = 4
 
     _, test_dataloader = get_dataloaders(test_set_portion, seed, batch_size)
 
@@ -316,17 +316,18 @@ if __name__ == '__main__':
         #"micro-overfit": "micro-overfit.pt",
         #"adamant-will": "adamant-will_best_checkpoint.pt",
         #"big-dropout": "big-dropout.pt",
-        "ugins-conjurant": "ugins-conjurant_best_checkpoint.pt",
-        "battlefield-promotion":"battlefield-promotion_best_checkpoint.pt"
+        #"ugins-conjurant": "ugins-conjurant_best_checkpoint.pt",
+        #"battlefield-promotion":"battlefield-promotion_best_checkpoint.pt",
+        "battlefield-promotion-400k": "battlefield-promotion_checkpoint_2025_01_16__13_42_00.pt",
         }
     
     return_test_fns = [
-        ("Test Function", eval_test_func, {}),
-        ("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
-        ("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
+        #("Test Function", eval_test_func, {}),
+        #("CE Reconstruction Loss", recon_loss, {"test_dataloader": test_dataloader}),
+        #("Attribute Reconstruction Loss", attribute_reconstruction_loss, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 1300}),
         ("TSNE Graphs", tsne_graphs, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "n": 500}),
-        ("Diagnostic Test", diagnostic_test, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "hypers": {"free_bits": 0.2}, "beta": 0.01}),
-        ("Log Cards", log_generated_card, {"tokenizer": tokenizer, "n": 1}),
+        #("Diagnostic Test", diagnostic_test, {"test_dataloader": test_dataloader, "tokenizer": tokenizer, "hypers": {"free_bits": 0.2}, "beta": 0.01}),
+        #("Log Cards", log_generated_card, {"tokenizer": tokenizer, "n": 1}),
     ]
 
     results = {name: [] for name, _, _ in return_test_fns}

@@ -13,8 +13,7 @@ function Welcome({enter}){
                 label = 'Create Room'
                 style={{display:'flex'}}
             >
-                <RoomCreate/>
-                <button onClick={enter}>Create </button>
+                <RoomCreate enter = {enter}/>
             </RoomModal>
             <button onClick={enter}>Join Room</button>
         </div>
@@ -22,11 +21,13 @@ function Welcome({enter}){
 }
 
 function Draft(){
+    const [roomId, setRoomId] = React.useState(null)
     const [inRoom, setInRoom] = React.useState(false)
+    const [isHost, setIsHost] = React.useState(false)
     React.useEffect(()=>{setInRoom(false)}, [])
     return(
         <>
-          {inRoom ?<Room/>: <Welcome enter={()=>setInRoom(true)}/> }  
+          {inRoom ?<Room roomId = {roomId} isHost = {isHost}/>: <Welcome enter={(id, host)=>{setRoomId(id);setInRoom(true);setIsHost(host)}}/> }  
         </>
     )
 }

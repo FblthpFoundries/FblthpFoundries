@@ -20,6 +20,7 @@ def getSet(set='mh3'):
     setURI = loads(get(f'{scryfallEndpoint}sets/{set}').text)['search_uri']
     page = loads(get(setURI).text)
     set = pd.DataFrame(page['data'])
+    #concat onto dataframe until paginated request is over
     while page['has_more'] == True:
         page = loads(get(page['next_page']).text)
         cards = pd.DataFrame(page['data'])

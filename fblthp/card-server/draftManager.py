@@ -5,9 +5,10 @@ class DraftManager():
     class Room():
 
         MIN_PLAYERS = 4
-        NUM_ROUNDS=1
-        def __init__(self, servePack):
-            self.set = getSet()
+        NUM_ROUNDS=3
+        def __init__(self, servePack, setId, roomId):
+            self.roomId = roomId
+            self.set = getSet(setId)
             self.players = []
             self.passRight = True #direction to pass packs
             self.round = 1
@@ -134,32 +135,67 @@ class DraftManager():
 
 
     def __init__(self,startRoom,servePack):
-        self.room = self.Room(servePack)
+        self.rooms = {}
         self.players = {}
         self.startRoom = startRoom
         self.servePack = servePack
         self.sets = getSetList()
+        self.idLock = threading.Lock()
 
     def getSets(self,):
-        return self.sets 
+        return self.sets
+
+    def makeRoomID(self):
+        self.idLock.acquire()
+        id = random.randint(1000, 9999)
+        while id in self.rooms:
+            id = random.randint(1000, 9999)
+        self.idLock.release()
+
+        return id
+
+    def createRoom(self, setId = 'mh3'):
+        
+        roomId = self.makeRoomID()
+        self.rooms[roomId] = self.Room(self.servePack, setId, roomId)
+
+        return roomId
 
 
-    def on_connect(self, player):
-        print('connect')
-        self.players[player] = self.Player(player, self.room) 
-        self.room.addPlayer(self.players[player])
-        self.startRoom(player)
+    def on_connect(self, player, roomid):
+        if not roomid in  self.rooms:
+            return False
+        if player in self.players:
+            return False
+        room = self.rooms[roomid]
+        self.players[player] = self.Player(player, room) 
+        room.addPlayer(self.players[player])
+        return True
+
 
     def on_disconnect(self, player):
         print(f'{player} disconnected')
-        self.room.remove(player)
+        room = self.getRoomFromPlayer(player)
+        room.remove(player)
         del self.players[player]
 
-    def startDraft(self ):
-        for _ in range(len(self.room.players), self.room.MIN_PLAYERS):
-            self.room.addPlayer(self.RoboDrafter(self.room))
-        self.room.startRound()
+    def startDraft(self , roomId):
+        if not roomId in self.rooms:
+            return False
+
+        room = self.rooms[roomId]
+
+        for p in room.players:
+            self.startRoom(p.id)
+
+        for _ in range(len(room.players), room.MIN_PLAYERS):
+            room.addPlayer(self.RoboDrafter(room))
+        room.startRound()
+
+    def getRoomFromPlayer(self, player):
+        return self.rooms[self.players[player].room.roomId]
         
 
     def on_pick(self, player, card):
-        self.room.onPick(player, card)
+        room = self.getRoomFromPlayer(player)
+        room.onPick(player, card)

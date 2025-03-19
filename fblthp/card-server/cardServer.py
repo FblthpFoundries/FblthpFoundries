@@ -13,9 +13,8 @@ socketio = SocketIO(logger = True, engineio_logger = True)
 
 def create_app():
     app = Flask(__name__)
-    cors = CORS(app)
+    CORS(app, resources={r'/*': {'origins':'*'}})
     app.config['SECRET_KEY'] = 'Fblthp\'s Balls'
-    app.config['CORS_HEADER'] = 'Content-Type'
     logging.basicConfig(filename='log.log',
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         filemode='a',
@@ -56,14 +55,35 @@ def create_app():
     def getSets():
         return draftManager.getSets()
 
-    @app.route('/startDraft')
+    @app.route('/startDraft', methods = ['POST'])
     def testPack():
-        draftManager.startDraft()
+        roomId = request.get_json()['room']['roomId']
+
+        print(roomId)
+
+        draftManager.startDraft(roomId)
         return 'pack'
+
+    @app.route('/create', methods=['POST'])
+    @cross_origin()
+    def createRoom():
+        content = request.get_json()
+
+        setId = content['setId']
+        print(setId)
+        roomId = draftManager.createRoom(setId)
+
+        return {'roomId': roomId}
+        
     
     @socketio.on('connect')
     def connect():
-        draftManager.on_connect(request.sid)
+        print(request.sid)
+
+    @socketio.on('joinRoom')
+    def joinRoom(roomId):
+        #now needs room ID to work
+        draftManager.on_connect(request.sid, roomId['roomId'])
 
     @socketio.on('disconnect')  
     def disconnect():

@@ -50,7 +50,7 @@ function PackGrid({ pack, onPick }) {
     )
 }
 
-function DraftRoom() {
+function DraftRoom({isHost, startRoom}) {
     const [roomState, setRoomState] = React.useState(roomStarted)
     const [hasPack, setHasPack] = React.useState(false)
     const [pack, setPack] = React.useState([])
@@ -75,16 +75,30 @@ function DraftRoom() {
             setHasPack(true)
         })
     }, [])
+    const startDraft = isHost ? <button onClick={()=>{startRoom()}}>Start Draft</button>:<p>Waiting for room to start</p>
 
     const displayPack = hasPack ? <PackGrid pack={pack} onPick={pickedCard} /> : <p>waiting for pack</p>
 
     return (<>
-        {roomState ? displayPack : <p>Waiting for pack</p>}
+        {roomState ? displayPack : startDraft}
     </>)
 }
 
-function Room() {
+function Room({roomId, isHost}) {
     const [connectHook, setConnectHook] = React.useState(connected)
+
+    function startRoom(){
+        fetch(constants['cardServer'] + '/startDraft',
+            {mode:'cors',
+            method:'POST',
+            headers: {
+                'Access-Control-Allow-Origin': constants['cardServer'],
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({room : roomId})
+            }
+        )
+    }
 
     function updateConnect(state) {
         connected = state
@@ -94,6 +108,7 @@ function Room() {
     React.useEffect(() => {
         if (!connected) {
             socket.connect()
+            socket.emit('joinRoom', roomId)
             updateConnect(true)
         }
     }, [])
@@ -101,7 +116,7 @@ function Room() {
     return (
         <>
             Testing Room
-            {connectHook ? <DraftRoom /> : <p>Not Connected</p>}
+            {connectHook ? <DraftRoom isHost={ isHost} startRoom = {startRoom}/> : <p>Not Connected</p>}
         </>
     )
 }

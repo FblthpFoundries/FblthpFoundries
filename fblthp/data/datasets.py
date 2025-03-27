@@ -49,6 +49,7 @@ FEATURE_DICT = {
     'type_line': '<tl>',
     'name': '<name>',
     'mana_cost': '<mc>',
+    'cmc': '<mv>',
     'oracle_text': '<ot>',
     'power': '<power>',
     'toughness': '<toughness>',
@@ -100,6 +101,8 @@ class MagicCardDataset(Dataset):
             logger.error(f"Failed to load dataset from {target}: {e}")
             raise
 
+        self.label_names = self.corpus_dataframe.columns.tolist()
+
     def __len__(self) -> int:
         """Return the number of items in the dataset.
         
@@ -117,8 +120,23 @@ class MagicCardDataset(Dataset):
         Returns:
             List of values for the specified card
         """
-        row = self.corpus_dataframe.iloc[idx]
-        return row.tolist()
+
+        row = self.corpus_dataframe.iloc[idx].tolist()
+        data = {}
+        text_fields = ['card', 'mc', 'oracle_text', 'name', 'type_line', 'flavor_text']
+        id_fields = ['tokens', 'mana_tokens', 'oracle_tokens', 'name_tokens', 'type_tokens', 'flavor_tokens']
+        numerical_fields = ['power', 'toughness', 'cmc', 'loyalty']
+        for i, field in enumerate(self.label_names):
+            if field in text_fields:
+                data[field] = row[i]
+            elif field in id_fields:
+                data[field] = torch.tensor(ast.literal_eval(row[i]))
+            elif field in numerical_fields:
+                if row[i] in ['*', '1+*', '?', '*+1', '*²', '∞', 'X', 'Y', '1d4+1']:
+                    row[i] = -1
+                data[field] = float(row[i])
+
+        return data
     
     def prepare_corpus(self) -> None:
         """Prepare the corpus by downloading and processing card data if needed."""
@@ -151,7 +169,7 @@ class MagicCardDataset(Dataset):
             # Save the JSON response to memory
             card_data = response.json()
             
-            features = ['mana_cost', 'name', 'type_line', 'power', 'toughness', 
+            features = ['cmc', 'mana_cost', 'name', 'type_line', 'power', 'toughness', 
                        'oracle_text', 'loyalty', 'flavor_text']
             
             
@@ -167,12 +185,16 @@ class MagicCardDataset(Dataset):
                         'card_faces' in card or 
                         'paper' not in card.get('games', [])):
                         continue
+                    if '.5' in str(card.get('cmc')):
+                        continue
                     
                     row = []
                     for feature in features:
                         # Clean up the text
-                        thing = card.get(feature, "<empty>")
-                        thing = str(thing).replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {")
+                        thing = card.get(feature, "")
+                        if feature == "cmc":
+                            thing = int(thing)
+                        thing = str(thing).replace("\"", "").replace("\n", " <nl> ")#.replace("}{", "} {")
                         row.append(f'"{thing}"')
                         
                     f.write(','.join(row) + '\n')
@@ -190,7 +212,9 @@ class MagicCardDataset(Dataset):
                     row = []
                     for feature in features:
                         # Clean up the text
-                        thing = card.get(feature, "<empty>")
+                        thing = card.get(feature, "")
+                        if feature == "cmc":
+                            thing = int(thing)
                         thing = str(thing).replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {")
                         row.append(f'{FEATURE_DICT[feature]}{thing}<\\{FEATURE_DICT[feature][1:]}')
                         
@@ -212,10 +236,11 @@ class MagicCardDataset(Dataset):
                         continue
                     
                     row = []
-                    row.append(f'<mv>{mv.mana_value(card.get("mana_cost", ""))}<\\mv>')
                     for feature in features:
                         # Clean up the text
-                        thing = card.get(feature, "<empty>")
+                        thing = card.get(feature, "")
+                        if feature == "cmc":
+                            thing = int(thing)
                         thing = str(thing).replace("\"", "").replace("\n", " <nl> ").replace("}{", "} {")
                         row.append(f'{FEATURE_DICT[feature]}{thing}<\\{FEATURE_DICT[feature][1:]}')
                     if 'Creature' not in card.get("type_line", ""):
@@ -261,7 +286,7 @@ class MagicCardDataset(Dataset):
         df = pd.read_csv(DEFAULT_CARDS_PATH)
         
         # Initialize tokenizers
-        text_tokenizer = get_mtg_tokenizer()
+        
         
         # Create tokenizers for each field with appropriate padding
         tokenizers = {}
@@ -271,6 +296,7 @@ class MagicCardDataset(Dataset):
             ('type', TOKEN_LENGTHS['type']), 
             ('flavor', TOKEN_LENGTHS['flavor_text'])
         ]:
+            text_tokenizer = get_mtg_tokenizer()
             tokenizers[field] = text_tokenizer
             tokenizers[field].enable_padding(
                 pad_id=0, 
@@ -299,7 +325,7 @@ class MagicCardDataset(Dataset):
         
         # Extract fields
         for field, tag in [
-            ('mc', 'mc'), ('power', 'power'), ('toughness', 'toughness'),
+            ('mc', 'mc'), ('power', 'power'), ('toughness', 'toughness'), ('loyalty', 'loyalty'),
             ('oracle_text', 'ot'), ('name', 'name'), 
             ('type_line', 'tl'), ('flavor_text', 'ft')
         ]:
@@ -313,7 +339,7 @@ class MagicCardDataset(Dataset):
         )
         
         # Convert power/toughness to int when possible
-        for field in ['power', 'toughness']:
+        for field in ['power', 'toughness', 'loyalty']:
             corpus[field] = corpus[field].apply(
                 lambda x: int(x) if x and str(x).isdigit() else x
             )
@@ -364,7 +390,7 @@ def parse_token_list(text: str) -> List[int]:
         return [1]  # Return default if parsing fails
 
 
-def collate_fn(batch: List[List]) -> Dict[str, Any]:
+def collate_fn(batch: List[Dict]) -> Dict[str, Any]:
     """Collate function for DataLoader to process a batch of samples.
     
     Args:
@@ -374,30 +400,21 @@ def collate_fn(batch: List[List]) -> Dict[str, Any]:
         Dictionary of tensors and values
     """
     try:
-        # Extract fields
-        ids = [parse_token_list(x[1]) for x in batch]
-        ids = torch.tensor(ids)
+        batch_out = {}
+        text_fields = ['card', 'mc', 'oracle_text', 'name', 'type_line', 'flavor_text']
+        id_fields = ['tokens', 'mana_tokens', 'oracle_tokens', 'name_tokens', 'type_tokens', 'flavor_tokens']
+        numerical_fields = ['power', 'toughness', 'cmc', 'loyalty']
         
-        # Extract all other fields
-        field_names = [
-            "originals", "mc", "power", "toughness", "cmc", 
-            "oracle_text", "name", "type_line", "flavor_text"
-        ]
-        fields = {field_names[i]: [x[i] for x in batch] for i in range(len(field_names))}
+        for field in text_fields:
+            batch_out[field] = [x[field] for x in batch]
+
+        for field in id_fields:
+            batch_out[field] = torch.stack([x[field] for x in batch])
         
-        # Extract and parse token fields
-        token_fields = [
-            "oracle_tokens", "name_tokens", "type_line_tokens", 
-            "flavor_text_tokens", "mana_tokens"
-        ]
-        parsed_tokens = {
-            field: [parse_token_list(x[i+10]) for x in batch] 
-            for i, field in enumerate(token_fields)
-        }
-        
-        # Combine all fields
-        result = {"ids": ids, **fields, **parsed_tokens}
-        return result
+        for field in numerical_fields:
+            batch_out[field] = torch.stack([torch.tensor(x[field]) for x in batch])
+
+        return batch_out
         
     except Exception as e:
         logger.error(f"Error in collate function: {e}")
@@ -442,8 +459,7 @@ def get_dataloaders(
         batch_size=batch_size, 
         shuffle=True, 
         pin_memory=True, 
-        num_workers=2, 
-        persistent_workers=True, 
+        num_workers=0, 
         collate_fn=collate_fn
     )
     
@@ -452,8 +468,7 @@ def get_dataloaders(
         batch_size=batch_size, 
         shuffle=False, 
         pin_memory=True, 
-        num_workers=2, 
-        persistent_workers=True, 
+        num_workers=0, 
         collate_fn=collate_fn
     )
 
@@ -474,7 +489,7 @@ def analyze_sequence_lengths(dataloader: DataLoader) -> None:
         logger.info("Analyzing sequence lengths...")
         
         # Fields to analyze
-        fields = ["mana_tokens", "oracle_tokens", "name_tokens", "type_line_tokens", "flavor_text_tokens"]
+        fields = ["mana_tokens", "oracle_tokens", "name_tokens", "type_tokens", "flavor_tokens"]
         datas = [[] for _ in range(len(fields))]
         maxes = [0 for _ in range(len(fields))]
         max_items = [None for _ in range(len(fields))]
@@ -518,9 +533,20 @@ if __name__ == "__main__":
     train_dataloader, test_dataloader = get_dataloaders(
         test_set_portion=0.1,
         seed=42,
-        batch_size=1,
+        batch_size=4,
         prepare_corpus=True
     )
+
+    item = next(iter(train_dataloader.dataset))
+    for key, value in item.items():
+        if torch.is_tensor(value):
+            value = value.shape
+        print(f"{key}: {value}") 
+
+    # batch = next(iter(train_dataloader))
+    # for key, value in batch.items():
+    #     if torch.is_tensor(value):
+    #         value = value.shape
+    #     print(f"{key}: {value}") 
     
-    # Analyze sequence lengths
     #analyze_sequence_lengths(train_dataloader)

@@ -116,7 +116,7 @@ def train_on_text_file(
 # Function to generate text
 def generate_text(
     prompt_text,
-    model_path='./text_model/final',
+    model_path='./momir/final',
     max_length=150,
     temperature=0.9,
     samples=10
@@ -149,14 +149,19 @@ def generate_text(
 
 if __name__ == '__main__':
     # Train the model
-    train_on_text_file(
-        MOMIR_LINES_PATH, 
-        output_dir='momir',
-        block_size=250,
-        )
+    model_dir = 'momir'
+    # train_on_text_file(
+    #     MOMIR_LINES_PATH, 
+    #     output_dir=model_dir,
+    #     block_size=250,
+    #     )
     
     # Generate sample text
     print("\nGenerating sample output...")
-    samples = generate_text("<mc>", samples=5)
+    samples = generate_text(
+        "<mv>3", 
+        samples=5, 
+        model_path=os.path.join(model_dir, 'final'),
+        max_length=250,)
     for s in samples:
         print(s)

@@ -7,9 +7,9 @@ DEFAULT_TOKENIZER_PATH = os.path.join(DATASET_DIR, 'mtg_tokenizer.json')
 def get_mtg_tokenizer():
     tokenizer_exists = os.path.exists(DEFAULT_TOKENIZER_PATH)
     if not tokenizer_exists:
-        tokenizer = Tokenizer(models.WordPiece())
+        tokenizer = Tokenizer(models.WordPiece(unk_token="[UNK]"))
         tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
-        special_tokens = ["<pad>", "<sos>", "<eos>", "<unk>"]
+        special_tokens = ["<pad>", "<sos>", "<eos>", "[UNK]"]
         special_tokens.extend([
             "<tl>", "<name>", "<mc>", "<ot>", "<power>", "<toughness>", "<loyalty>", "<ft>", "<nl>",
             "<\\tl>", "<\\name>", "<\\mc>", "<\\ot>", "<\\power>", "<\\toughness>", "<\\loyalty>", "<\\ft>",

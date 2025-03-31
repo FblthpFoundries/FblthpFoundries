@@ -15,6 +15,7 @@ class DraftManager():
             self.servePack = servePack #call back to serve packs via sockets
             self.lastPick = 0 #number of players who have completeted last pick
             self.doneCountLock = threading.Lock()
+            self.inProgress = False
 
         def playerFinished(self):
             self.doneCountLock.acquire()
@@ -37,6 +38,7 @@ class DraftManager():
         and serving a pack to each
         """
         def startRound(self,):
+            self.inProgress = True
             playerCount = len(self.players)
             for i in range(playerCount):
                 nextIdx = i + 1 if self.passRight else i -1
@@ -141,6 +143,7 @@ class DraftManager():
         self.servePack = servePack
         self.sets = getSetList()
         self.idLock = threading.Lock()
+        self.rooms[1234] = self.Room(self.servePack, 'mh3', 1234)
 
     def getSets(self,):
         return self.sets
@@ -160,6 +163,19 @@ class DraftManager():
         self.rooms[roomId] = self.Room(self.servePack, setId, roomId)
 
         return roomId
+    
+    def checkRoom(self, roomId):
+        roomId = int(roomId)
+        self.idLock.acquire()
+        if not roomId in self.rooms:
+            self.idLock.release()
+            return False
+        
+        if self.rooms[roomId].inProgress:
+            self.idLock.release()
+            return False
+        return True
+
 
 
     def on_connect(self, player, roomid):

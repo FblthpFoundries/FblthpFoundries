@@ -109,6 +109,7 @@ function Room({roomId, isHost}) {
         if (!connected) {
             socket.connect()
             socket.emit('joinRoom', roomId)
+            console.log(roomId)
             updateConnect(true)
         }
     }, [])

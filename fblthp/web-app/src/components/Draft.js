@@ -3,6 +3,7 @@ import Room from './Room.js'
 import './Draft.css'
 import RoomModal from './Modal.js'
 import RoomCreate from "./RoomCreate"
+import JoinRoom from "./JoinRoom.js"
 
 
 function Welcome({enter}){
@@ -15,7 +16,14 @@ function Welcome({enter}){
             >
                 <RoomCreate enter = {enter}/>
             </RoomModal>
-            <button onClick={enter}>Join Room</button>
+            <RoomModal
+                buttonText = 'Join Room'
+                label = 'Join Room'
+                Style = {{display:'flex'}}
+            >
+                <JoinRoom enter = {enter}/>
+
+            </RoomModal>
         </div>
     )
 }

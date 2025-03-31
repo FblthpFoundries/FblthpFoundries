@@ -54,10 +54,17 @@ def create_app():
     @app.route('/getSets')
     def getSets():
         return draftManager.getSets()
+    
+    @app.route('/checkRoom', methods = ['POST'])
+    def checkRoom():
+        print(request.get_json())
+        roomId = request.get_json()['room']
+
+        return {'isValid': draftManager.checkRoom(roomId)}
 
     @app.route('/startDraft', methods = ['POST'])
     def testPack():
-        roomId = request.get_json()['room']['roomId']
+        roomId = request.get_json()['room']
 
         print(roomId)
 
@@ -82,8 +89,9 @@ def create_app():
 
     @socketio.on('joinRoom')
     def joinRoom(roomId):
+        print(roomId)
         #now needs room ID to work
-        draftManager.on_connect(request.sid, roomId['roomId'])
+        draftManager.on_connect(request.sid, roomId)
 
     @socketio.on('disconnect')  
     def disconnect():

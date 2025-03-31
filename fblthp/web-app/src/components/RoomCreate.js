@@ -27,7 +27,7 @@ function RoomCreate({enter}){
             },
             body : JSON.stringify(data)}
         ).then(response => response.json())
-        .then(data => enter(data, true))
+        .then(data => enter(data['roomId'], true))
         .catch(e => console.log(e))
     }
 

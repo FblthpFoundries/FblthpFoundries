@@ -19,6 +19,7 @@ fblthp/helpers/toZip/set
 fblthp/wordpiece_tokenizer.json
 fblthp/wandb/*
 fblthp/output.txt
+fblthp/mse/MSE
 *.pt
 fblthp/tokenizer/*
 fblthp/card-server/images/**/*.png

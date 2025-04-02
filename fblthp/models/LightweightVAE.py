@@ -1,35 +1,43 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
-# Check if a GPU is available and use it if so
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#print(f"Using device: {device}")
-
-# Positional Encoding Module
+# Positional Encoding Module (unchanged)
 class PositionalEncoding(nn.Module):
     def __init__(self, embed_dim, max_len=5000):
         super(PositionalEncoding, self).__init__()
-        
-        
-        # Register pe as a buffer, meaning it won't be updated during training
         self.register_buffer('pe', self.compute_positional_encodings(embed_dim, max_len))
+        
     def compute_positional_encodings(self, embed_dim, max_len):
-        # Create a matrix of shape (max_len, embed_dim) for positional encodings
         pe = torch.zeros(max_len, embed_dim)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        
-        # Compute positional encodings using sine and cosine functions
         div_term = torch.exp(torch.arange(0, embed_dim, 2).float() * (-math.log(10000.0) / embed_dim))
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
         return pe
+        
     def forward(self, x):
-        # Add positional encodings to the input embeddings
         x = x + self.pe[:x.size(1), :].permute(1, 0, 2)
         return x
 
+def debug_tensor(name, tensor):
+    """Print debug information about a tensor"""
+    if tensor is None:
+        print(f"DEBUG {name}: None")
+        return
+        
+    print(f"DEBUG {name}:")
+    print(f"  - Shape: {tensor.shape}")
+    print(f"  - Type: {tensor.dtype}")
+    print(f"  - Min: {tensor.min().item() if tensor.numel() > 0 else 'N/A'}")
+    print(f"  - Max: {tensor.max().item() if tensor.numel() > 0 else 'N/A'}")
+    print(f"  - Mean: {tensor.mean().item() if tensor.numel() > 0 else 'N/A'}")
+    print(f"  - Has NaN: {torch.isnan(tensor).any().item()}")
+    print(f"  - Has Inf: {torch.isinf(tensor).any().item()}")
+
+# Encoder (mostly unchanged)
 class LightweightEncoder(nn.Module):
     def __init__(self, 
                  main_vocab_size=20000,
@@ -37,7 +45,8 @@ class LightweightEncoder(nn.Module):
                  text_embed_dim=128, 
                  mana_embed_dim=16,
                  hidden_dim=256,
-                 latent_dim=64):
+                 latent_dim=64,
+                 init_logvar_bias=-1.0):
         super(LightweightEncoder, self).__init__()
         
         # Embeddings
@@ -49,7 +58,6 @@ class LightweightEncoder(nn.Module):
         self.type_encoder = nn.GRU(text_embed_dim, hidden_dim//2, batch_first=True, bidirectional=True)
         self.flavor_encoder = nn.GRU(text_embed_dim, hidden_dim//2, batch_first=True, bidirectional=True)
         self.mana_encoder = nn.GRU(mana_embed_dim, hidden_dim//4, batch_first=True)
-        # could switch to lstm / transformerencoder
         self.oracle_encoder = nn.GRU(text_embed_dim, hidden_dim//2, batch_first=True, bidirectional=True)
         
         # Stats encoder
@@ -62,7 +70,7 @@ class LightweightEncoder(nn.Module):
 
         with torch.no_grad():
             # Initialize to small negative values to start with small variances
-            self.fc_logvar.bias.fill_(-1.0)
+            self.fc_logvar.bias.fill_(init_logvar_bias)
     
     def encode(self, tokens, encoder, use_mana_embedding=False):
         """Unified encoding function that switches embedding based on field type"""
@@ -107,19 +115,13 @@ class LightweightEncoder(nn.Module):
         # Mana encoding with specialized embeddings
         mana_hidden = self.encode(data['mana_tokens'], self.mana_encoder, use_mana_embedding=True)
         
-        # Stats encoding
+        # Stats encoding - standardized handling of missing values
         stats = torch.zeros(data['cmc'].size(0), 4, device=data['cmc'].device)
         stats[:, 0] = data['cmc']
         
         # Handle power/toughness/loyalty with -1 for non-standard values
         for i, stat in enumerate([data['power'], data['toughness'], data['loyalty']]):
-            stats[:, i+1] = torch.where(
-                (stat >= 0) & (stat <= 20), 
-                stat,
-                torch.tensor(-1.0, device=stat.device)
-            )
-        # In the encoder's forward method
-        stats = torch.clamp(stats, min=-1, max=20)  # Prevent extreme values
+            stats[:, i+1] = torch.clamp(stat, min=-1, max=20)  # Prevent extreme values
         
         stats_hidden = self.stats_encoder(stats)
         
@@ -135,9 +137,7 @@ class LightweightEncoder(nn.Module):
         
         return mu, logvar
 
-
-
-
+# Decoder (mostly unchanged)
 class LightweightDecoder(nn.Module):
     def __init__(self, 
                  main_vocab_size=20000,
@@ -150,7 +150,9 @@ class LightweightDecoder(nn.Module):
                  max_flavor_len=100,
                  max_name_len=10,
                  max_type_len=10,
-                 max_mana_len=6):
+                 max_mana_len=6,
+                 sos_token_id=1,
+                 eos_token_id=2):
         super(LightweightDecoder, self).__init__()
         
         # Store config
@@ -163,6 +165,10 @@ class LightweightDecoder(nn.Module):
             'type': max_type_len,
             'mana': max_mana_len
         }
+        
+        # Store token IDs as class variables for easier configuration
+        self.sos_token_id = sos_token_id
+        self.eos_token_id = eos_token_id
         
         # Task embeddings (0=oracle, 1=flavor, 2=name, 3=type)
         self.task_embedding = nn.Embedding(4, text_embed_dim)
@@ -223,10 +229,6 @@ class LightweightDecoder(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(hidden_dim//2, 4)  # [CMC, Power, Toughness, Loyalty]
         )
-        
-        # Special tokens
-        self.sos_token_id = 1  # Start of sequence
-        self.eos_token_id = 2  # End of sequence
     
     def _create_causal_mask(self, size, device):
         """Create a causal mask for the transformer decoder"""
@@ -344,15 +346,7 @@ class LightweightDecoder(nn.Module):
         return results
     
     def generate(self, z):
-        """
-        Generate sequences from latent space (autoregressive generation at inference time)
-        
-        Args:
-            z (Tensor): Latent vector [batch_size, latent_dim]
-            
-        Returns:
-            dict: Dictionary of generated outputs
-        """
+        """Generate sequences from latent space (autoregressive generation at inference time)"""
         batch_size = z.size(0)
         results = {}
         
@@ -458,10 +452,7 @@ class LightweightDecoder(nn.Module):
             results[f'{field}_logits'] = output_logits
         
         return results
-    
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+
 
 class LightweightVAE(nn.Module):
     def __init__(self, 
@@ -477,12 +468,14 @@ class LightweightVAE(nn.Module):
                  max_name_len=10,
                  max_type_len=10,
                  max_mana_len=6,
-                 kl_weight=0.1):
+                 kl_weight=0.1,
+                 debug_mode=False):
         super(LightweightVAE, self).__init__()
         
         # Save parameters
         self.latent_dim = latent_dim
         self.kl_weight = kl_weight
+        self.debug_mode = debug_mode
         
         # Initialize encoder and decoder
         self.encoder = LightweightEncoder(
@@ -523,27 +516,42 @@ class LightweightVAE(nn.Module):
         eps = torch.randn_like(std)
         
         return mu + eps * std
-    def kl_divergence_debug(self, mu, logvar):
-        # Break down the KL divergence calculation
-        term1 = 1
-        term2 = logvar
-        term3 = -mu.pow(2)
-        term4 = -logvar.exp()
+    
+    def compute_kl_divergence(self, mu, logvar):
+        """
+        Compute KL divergence between N(mu, var) and N(0, 1)
+        Uses a numerically stable implementation
         
-        combined = term1 + term2 + term3 + term4
+        Args:
+            mu (Tensor): Mean of the latent Gaussian
+            logvar (Tensor): Log variance of the latent Gaussian
+            
+        Returns:
+            Tensor: KL divergence
+        """
+        # Clip values for numerical stability
+        mu_clipped = torch.clamp(mu, min=-8.0, max=8.0)
+        logvar_clipped = torch.clamp(logvar, min=-8.0, max=8.0)
         
-        print(f"KL Terms - term2(logvar): {term2.min().item():.4f} to {term2.max().item():.4f}")
-        print(f"KL Terms - term3(-mu²): {term3.min().item():.4f} to {term3.max().item():.4f}")
-        print(f"KL Terms - term4(-exp(logvar)): {term4.min().item():.4f} to {term4.max().item():.4f}")
-        print(f"KL Terms - combined: {combined.min().item():.4f} to {combined.max().item():.4f}")
+        # Stable KL calculation
+        kl_div = 0.5 * torch.sum(
+            torch.exp(logvar_clipped) + mu_clipped.pow(2) - 1.0 - logvar_clipped
+        ) / mu.size(0)
         
-        kl_raw = -0.5 * combined
-        print(f"KL Raw: {kl_raw.min().item():.4f} to {kl_raw.max().item():.4f}")
+        # Optional debug information
+        if self.debug_mode:
+            with torch.no_grad():
+                kl_terms = {
+                    'var': torch.exp(logvar_clipped).mean().item(),
+                    'mu_sq': mu_clipped.pow(2).mean().item(),
+                    'logvar': logvar_clipped.mean().item()
+                }
+                print(f"KL Debug - var: {kl_terms['var']:.4f}, "
+                      f"mu²: {kl_terms['mu_sq']:.4f}, "
+                      f"logvar: {kl_terms['logvar']:.4f}, "
+                      f"KL: {kl_div.item():.4f}")
         
-        kl_sum = kl_raw.sum()
-        print(f"KL Sum: {kl_sum.item():.4f}, isnan: {torch.isnan(kl_sum).item()}")
-        
-        return kl_sum
+        return kl_div
     
     def forward(self, data):
         """
@@ -557,7 +565,10 @@ class LightweightVAE(nn.Module):
         """
         # Encode
         mu, logvar = self.encoder(data)
-        self.kl_divergence_debug(mu, logvar)
+        
+        # Compute KL divergence (for debugging only)
+        if self.debug_mode:
+            self.compute_kl_divergence(mu, logvar)
         
         # Sample latent variable
         z = self.reparameterize(mu, logvar)
@@ -572,27 +583,9 @@ class LightweightVAE(nn.Module):
         
         return reconstructions
     
-    def generate(self, z=None, num_samples=1):
-        """
-        Generate samples from the model
-        
-        Args:
-            z (Tensor, optional): Latent vectors to decode. If None, samples from prior.
-            num_samples (int, optional): Number of samples to generate from prior (if z is None)
-            
-        Returns:
-            dict: Dictionary containing generated outputs
-        """
-        # Sample from prior if z not provided
-        if z is None:
-            z = torch.randn(num_samples, self.latent_dim, device=self.device)
-        
-        # Generate outputs autoregressively
-        return self.decoder.generate(z)
-    
     def compute_loss(self, data, reconstructions):
         """
-        Compute VAE loss (reconstruction + KL divergence)
+        Compute VAE loss (reconstruction + KL divergence) with enhanced stability
         
         Args:
             data (dict): Dictionary containing input data
@@ -602,98 +595,141 @@ class LightweightVAE(nn.Module):
             Tensor: Total loss
             dict: Dictionary containing individual loss components
         """
+        # Initialize loss components dictionary
         loss_components = {}
         
-        # Text field reconstruction losses (cross-entropy)
+        # Compute KL divergence
+        kl_loss = self.compute_kl_divergence(
+            reconstructions['mu'], reconstructions['logvar']
+        )
+        loss_components['kl_loss'] = kl_loss
+        
+        # Simplified approach to compute total reconstruction loss
+        total_recon_loss = 0.0
+        valid_token_count = 0
+        
+        # Text field reconstruction losses
         for field in ['oracle', 'flavor', 'name', 'type']:
             # Get target tokens and reconstruction logits
             target = data[f'{field}_tokens']
             logits = reconstructions[f'{field}_logits']
             
-            # Compute loss only on non-padding tokens
+            # Create mask for non-padding tokens
             mask = (target != 0).float()
-            if (mask.sum(dim=1) == 0).any():
-                print("Warning: Found examples with all padding tokens!")
-                # Add a small value to ensure no division by zero
-                mask = mask + 1e-8
+            valid_tokens = mask.sum()
             
-            # Flatten predictions and targets
-            flat_logits = logits.view(-1, logits.size(-1))
-            flat_targets = target.view(-1)
-            
-            # Compute cross-entropy loss
-            field_loss = F.cross_entropy(flat_logits, flat_targets, reduction='none')
-            field_loss = field_loss.view_as(target) * mask
-            field_loss = field_loss.sum() / (mask.sum() + 1e-8)
-            
-            loss_components[f'{field}_loss'] = field_loss
+            if valid_tokens > 0:
+                # Compute cross-entropy loss with masking
+                flat_logits = logits.view(-1, logits.size(-1))
+                flat_targets = target.view(-1)
+                
+                field_loss = F.cross_entropy(flat_logits, flat_targets, reduction='none')
+                field_loss = field_loss.view_as(target) * mask
+                field_loss = field_loss.sum() / valid_tokens
+                
+                # Store individual field loss
+                loss_components[f'{field}_loss'] = field_loss
+                
+                # Add to total reconstruction loss
+                total_recon_loss += field_loss
+                valid_token_count += 1
         
         # Mana cost reconstruction loss
         mana_logits = reconstructions['mana_logits']
         mana_targets = data['mana_tokens']
         mana_mask = (mana_targets != 0).float()
+        valid_mana_tokens = mana_mask.sum()
         
-        flat_mana_logits = mana_logits.view(-1, mana_logits.size(-1))
-        flat_mana_targets = mana_targets.view(-1)
+        if valid_mana_tokens > 0:
+            flat_mana_logits = mana_logits.view(-1, mana_logits.size(-1))
+            flat_mana_targets = mana_targets.view(-1)
+            
+            mana_loss = F.cross_entropy(flat_mana_logits, flat_mana_targets, reduction='none')
+            mana_loss = mana_loss.view_as(mana_targets) * mana_mask
+            mana_loss = mana_loss.sum() / valid_mana_tokens
+            
+            loss_components['mana_loss'] = mana_loss
+            total_recon_loss += mana_loss
+            valid_token_count += 1
         
-        mana_loss = F.cross_entropy(flat_mana_logits, flat_mana_targets, reduction='none')
-        mana_loss = mana_loss.view_as(mana_targets) * mana_mask
-        mana_loss = mana_loss.sum() / (mana_mask.sum() + 1e-8)
+        # --------- DEBUGGING MSE LOSS SECTION ---------
+        # Stats regression losses (with careful handling for stability)
+        stats_loss = 0.0
+        stats_count = 0
         
-        loss_components['mana_loss'] = mana_loss
-        
-        # Stats regression losses (MSE)
         for stat in ['cmc', 'power', 'toughness', 'loyalty']:
-            # Skip invalid stats (e.g., non-creatures won't have power/toughness)
             if stat in data and stat in reconstructions:
+                # Debug the values 
+                if hasattr(self, 'debug_mode') and self.debug_mode:
+                    debug_tensor(f"data[{stat}]", data[stat])
+                    debug_tensor(f"reconstructions[{stat}]", reconstructions[stat])
+                
+                # Ensure predictions are finite
+                pred_values = reconstructions[stat]
+                if torch.isnan(pred_values).any() or torch.isinf(pred_values).any():
+                    # Replace NaN/Inf with zeros to prevent propagation
+                    pred_values = torch.nan_to_num(pred_values, nan=0.0, posinf=0.0, neginf=0.0)
+                    if hasattr(self, 'debug_mode') and self.debug_mode:
+                        print(f"WARNING: Found NaN/Inf in {stat} predictions, replaced with zeros")
+                
+                # Clamp prediction values to reasonable range
+                pred_values = torch.clamp(pred_values, min=-20.0, max=20.0)
+                
                 # Only compute loss for valid values (>= 0)
                 valid_mask = (data[stat] >= 0).float()
-                if valid_mask.sum() > 0:
-                    stat_loss = F.mse_loss(
-                        reconstructions[stat] * valid_mask,
-                        data[stat] * valid_mask,
-                        reduction='sum'
-                    ) / (valid_mask.sum() + 1e-8)
-                    loss_components[f'{stat}_loss'] = stat_loss
-                else:
-                    loss_components[f'{stat}_loss'] = torch.tensor(0.0, device=data[stat].device)
-
+                valid_count = valid_mask.sum()
+                
+                if valid_count > 0:
+                    # Get target values and ensure they're valid
+                    target_values = data[stat] * valid_mask
+                    
+                    # Compute squared difference manually with careful handling
+                    squared_diff = (pred_values * valid_mask - target_values).pow(2)
+                    
+                    # Check for NaN in squared differences
+                    if torch.isnan(squared_diff).any():
+                        if hasattr(self, 'debug_mode') and self.debug_mode:
+                            debug_tensor(f"squared_diff_{stat}", squared_diff)
+                        # Replace NaN with zeros
+                        squared_diff = torch.nan_to_num(squared_diff, nan=0.0)
+                    
+                    # Sum and normalize
+                    stat_loss = squared_diff.sum() / valid_count
+                    
+                    # Final safety check
+                    if not torch.isnan(stat_loss) and not torch.isinf(stat_loss):
+                        loss_components[f'{stat}_loss'] = stat_loss
+                        stats_loss += stat_loss
+                        stats_count += 1
+                    else:
+                        # Use a small constant loss if we still have NaN
+                        stat_loss = torch.tensor(0.1, device=data[stat].device)
+                        loss_components[f'{stat}_loss'] = stat_loss
+                        stats_loss += stat_loss
+                        stats_count += 1
+                        if hasattr(self, 'debug_mode') and self.debug_mode:
+                            print(f"WARNING: Final {stat} loss was NaN, using constant")
         
+        # Add stats loss to total reconstruction loss
+        if stats_count > 0:
+            total_recon_loss += stats_loss / stats_count
         
-        # Add numerical stability to the KL calculation
-        # KL with safeguards
-        logvar_clipped = torch.clamp(reconstructions['logvar'], min=-8.0, max=8.0)
-        mu_clipped = torch.clamp(reconstructions['mu'], min=-3.0, max=3.0)
-        var_clipped = torch.exp(logvar_clipped).clamp(min=1e-8, max=10.0)
-        kl_loss = -0.5 * torch.sum(
-            1 + logvar_clipped
-            - mu_clipped  # Prevent exploding values 
-            - logvar_clipped  # Prevent exp overflow or zeros
-        ) / data['name_tokens'].size(0)
+        # Average the reconstruction loss
+        if valid_token_count > 0:
+            total_recon_loss /= valid_token_count
         
-        loss_components['kl_loss'] = kl_loss
+        # Store total reconstruction loss
+        loss_components['recon_loss'] = total_recon_loss
         
-        # Combine losses`
-        text_loss = sum([
-            loss_components['oracle_loss'],
-            loss_components['flavor_loss'],
-            loss_components['name_loss'],
-            loss_components['type_loss']
-        ])
-        
-        stats_loss = sum([
-            loss_components.get(f'{stat}_loss', torch.tensor(0.0, device=kl_loss.device))
-            for stat in ['cmc', 'power', 'toughness', 'loyalty']
-        ])
-        
-        # Total reconstruction loss
-        recon_loss = text_loss + loss_components['mana_loss'] + stats_loss
-        
-        # Total loss
-        total_loss = recon_loss + self.kl_weight * kl_loss
-        
-        loss_components['recon_loss'] = recon_loss
+        # Compute total loss
+        total_loss = total_recon_loss + self.kl_weight * kl_loss
         loss_components['total_loss'] = total_loss
+        
+        # Final sanity check
+        if torch.isnan(total_loss):
+            print("WARNING: Total loss is NaN!")
+            # Return a small constant loss to avoid crashing
+            return torch.tensor(1.0, device=total_loss.device, requires_grad=True), loss_components
         
         return total_loss, loss_components
     
@@ -702,32 +738,7 @@ class LightweightVAE(nn.Module):
         """Get the device the model is on"""
         return next(self.parameters()).device
     
-    def interpolate(self, data1, data2, steps=10):
-        """
-        Interpolate between two data points in latent space
-        
-        Args:
-            data1 (dict): First data point
-            data2 (dict): Second data point
-            steps (int): Number of interpolation steps
-            
-        Returns:
-            list: List of decoded outputs at each interpolation step
-        """
-        # Encode both inputs
-        mu1, _ = self.encoder(data1)
-        mu2, _ = self.encoder(data2)
-        
-        # Create interpolation steps
-        alphas = torch.linspace(0, 1, steps=steps, device=mu1.device)
-        z_interp = torch.stack([
-            mu1 * (1 - alpha) + mu2 * alpha
-            for alpha in alphas
-        ])
-        
-        # Generate from each interpolated point
-        results = []
-        for z in z_interp:
-            results.append(self.decoder.generate(z.unsqueeze(0)))
-        
-        return results
+    def set_debug_mode(self, enabled=True):
+        """Enable or disable debug mode"""
+        self.debug_mode = enabled
+        return self

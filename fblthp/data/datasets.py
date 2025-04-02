@@ -8,6 +8,7 @@ from Scryfall API for use in machine learning models.
 import os
 import ast
 import re
+import math
 import logging
 from typing import Tuple, Dict, List, Optional, Union, Any
 
@@ -133,8 +134,11 @@ class MagicCardDataset(Dataset):
                 data[field] = torch.tensor(ast.literal_eval(row[i]))
             elif field in numerical_fields:
                 if row[i] in ['*', '1+*', '?', '*+1', '*²', '∞', 'X', 'Y', '1d4+1']:
-                    row[i] = -1
-                data[field] = float(row[i])
+                    data[field] = -1.0
+                elif math.isnan(float(row[i])):
+                    data[field] = -1.0
+                else:
+                    data[field] = float(row[i])
 
         return data
     
